@@ -1,0 +1,52 @@
+{
+    "name": "Music Player for AugmentOS",
+    "description": "Display and control your Spotify music on AugmentOS smart glasses",
+    "version": "1.0.0",
+    "settings": [
+      {
+        "key": "pollInterval",
+        "type": "slider",
+        "label": "Update Frequency (seconds)",
+        "min": 2,
+        "max": 30,
+        "defaultValue": 5
+      },
+      {
+        "key": "showControls",
+        "type": "toggle",
+        "label": "Show Voice Control Instructions",
+        "defaultValue": true
+      },
+      {
+        "key": "showAlbumArt",
+        "type": "toggle",
+        "label": "Show Album Artwork",
+        "defaultValue": true
+      },
+      {
+        "key": "displayModeInfo",
+        "type": "titleValue",
+        "label": "Display Format",
+        "value": "Choose how music information appears on your glasses"
+      },
+      {
+        "key": "displayMode",
+        "type": "select",
+        "label": "Display Mode",
+        "options": [
+          { "label": "Reference Card",  "value": "reference" },
+          { "label": "Bullet Points",   "value": "bullets" },
+          { "label": "Text Rows",       "value": "rows" },
+          { "label": "Double Text",     "value": "double" },
+          { "label": "Text Wall",       "value": "wall" }
+        ],
+        "defaultValue": "reference"
+      },
+      {
+        "key": "controlsInfo",
+        "type": "titleValue",
+        "label": "Voice Controls",
+        "value": "Say these commands to control your music:\n• 'What's playing?'\n• 'Play music'\n• 'Pause music'\n• 'Next track'\n• 'Previous track'"
+      }
+    ]
+  }
