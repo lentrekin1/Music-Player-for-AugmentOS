@@ -1,315 +1,216 @@
 import { TpaServer, TpaSession } from '@augmentos/sdk';
 import SpotifyWebApi from 'spotify-web-api-node';
 import express from 'express';
-import { createServer } from 'http';
-import dotenv from 'dotenv';
+import { SpotifyCredentials } from '../src/types';
+import dotenv from 'dotenv'
 
-// Load environment variables
-dotenv.config();
-
-// Spotify API credentials
-const clientId = process.env.SPOTIFY_CLIENT_ID;
-const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
-const redirectUri = process.env.REDIRECT_URI || 'http://localhost:3000/callback';
-
-// Store user tokens
-const userTokens = new Map<string, {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-}>();
-
-class SpotifyTPA extends TpaServer {
+class MusicPlayer extends TpaServer {
   private spotifyApi: SpotifyWebApi;
-  private tokenRefreshIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private userTokens: Map<string, SpotifyCredentials> = new Map();
+  private nowPlayingIntervals: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(config: any) {
     super(config);
-    
-    this.spotifyApi = new SpotifyWebApi({
-      clientId,
-      clientSecret,
-      redirectUri
-    });
-    
-    // Setup additional routes for OAuth flow
-    this.setupOAuthRoutes();
-  }
 
-  private setupOAuthRoutes() {
-    const app = express();
-    const server = createServer(app);
-    
-    // Login route
-    app.get('/login', (req, res) => {
-      const state = Math.random().toString(36).substring(2, 15);
-      const scopes = [
-        'user-read-private',
-        'user-read-email',
-        'user-read-currently-playing',
-        'user-read-playback-state',
-        'user-modify-playback-state'
-      ];
-      
-      const authorizeURL = this.spotifyApi.createAuthorizeURL(scopes, state);
-      res.redirect(authorizeURL);
+    // Initialize Spotify Api with app credentials
+    this.spotifyApi = new SpotifyWebApi({
+      clientId: process.env.SPOTIFY_CLIENT_ID || 'YOUR_CLIENT_ID',
+      clientSecret: process.env.SPOTIFY_CLIENT_SECRET || 'YOUR_CLIENT_SECRET',
+      redirectUri: process.env.REDIRECT_URI || 'http://localhost:4040/callback'
     });
-    
-    // Callback route
-    app.get('/callback', async (req, res) => {
-      const { code } = req.query;
-      
+
+    // Set up express server for auth callback
+    const app = this.getExpressApp();
+
+    // Handle spotify auth
+    app.get('/login/:sessionId', (req, res) => {
+      const sessionId = req.params.sessionId;
+      // State value to verify callback is true
+      const state = sessionId;
+      // Generate auth URL with necessary scopes (Spotify web-api scopes)
+      const authUrl = this.spotifyApi.createAuthorizeURL([
+        'user-read-currently-playing',
+        'user-read-playback-state'
+      ], state);
+
+      res.redirect(authUrl);
+    });
+
+    // Handle callback from Spotify
+    app.get('/callback', async(req, res) => {
+      const { code, state } = req.query;
+      const sessionId = state as string;
+
       try {
-        const data = await this.spotifyApi.authorizationCodeGrant(code as string);
-        const { access_token, refresh_token, expires_in } = data.body;
-        
-        // For demo purposes, we're using a fixed userId
-        // In a real app, you'd map this to the authenticated user
-        const userId = 'demo-user';
-        
-        userTokens.set(userId, {
-          accessToken: access_token,
-          refreshToken: refresh_token,
-          expiresAt: Date.now() + expires_in * 1000
+        // Exchange authorization code for access token
+        const data = await this.spotifyApi.authorizationCodeGrant(code as string)
+
+        // Store user tokens for this session
+        this.userTokens.set(sessionId, {
+          accessToken: data.body.access_token,
+          refreshToken: data.body.refresh_token,
+          expiresAt: Date.now() + data.body.expires_in * 1000
         });
-        
-        // Setup token refresh interval
-        this.setupTokenRefresh(userId);
-        
-        res.send('Authentication successful! You can now close this window and use the app on your AugmentOS device.');
+
+        res.send('Authentication successful! You can close this window and return to your glasses.');
+
+        // If there's a session active, display now playing information
+        const session = this.activeSessions.get(sessionId);
+        if (session) {
+          this.startNowPlayingUpdates(session, sessionId);
+        }
       } catch (error) {
-        console.error('Error during authorization:', error);
-        res.status(500).send('Authentication failed');
+        console.error('Authentication error:', error);
+        res.send('Authentication failed. Please try again.');
       }
     });
-    
-    // Start the server
-    const port = 3001; // Different from TPA server port
-    server.listen(port, () => {
-      console.log(`OAuth server running on port ${port}`);
-      console.log(`Visit http://localhost:${port}/login to authenticate with Spotify`);
+
+    // Starts the express server
+    app.listen(process.env.AUTH_PORT, () => {
+      console.log(`Authentication server running on port ${process.env.AUTH_PORT}`);
     });
   }
-  
-  private setupTokenRefresh(userId: string) {
-    // Clear any existing interval
-    if (this.tokenRefreshIntervals.has(userId)) {
-      clearInterval(this.tokenRefreshIntervals.get(userId));
-    }
-    
-    // Set up refresh interval (refresh tokens 5 minutes before they expire)
-    const userToken = userTokens.get(userId);
-    if (userToken) {
-      const refreshTime = (userToken.expiresAt - Date.now() - 5 * 60 * 1000);
-      
-      const interval = setInterval(async () => {
-        try {
-          const userData = userTokens.get(userId);
-          if (!userData) return;
-          
-          this.spotifyApi.setRefreshToken(userData.refreshToken);
-          const data = await this.spotifyApi.refreshAccessToken();
-          
-          userTokens.set(userId, {
-            accessToken: data.body.access_token,
-            refreshToken: userData.refreshToken,
-            expiresAt: Date.now() + data.body.expires_in * 1000
-          });
-          
-          console.log(`Refreshed token for user ${userId}`);
-        } catch (error) {
-          console.error('Error refreshing token:', error);
-        }
-      }, refreshTime > 0 ? refreshTime : 0);
-      
-      this.tokenRefreshIntervals.set(userId, interval);
-    }
-  }
 
+  // Called when new user connects to app
   protected async onSession(session: TpaSession, sessionId: string, userId: string): Promise<void> {
-    session.layouts.showTextWall("Spotify TPA Ready!");
-    
-    // Check if user is authenticated
-    const userData = userTokens.get(userId);
-    if (!userData) {
-      session.layouts.showReferenceCard(
-        "Authentication Required",
-        "Please visit http://localhost:3001/login on your computer to connect your Spotify account."
+    console.log(`New session started: ${sessionId} for user: ${userId}`);
+
+    // Check if user is already authenticated with spotify
+    if (this.userTokens.has(sessionId)) {
+      // User is authenticated, start showing now playing info
+      this.startNowPlayingUpdates(session, sessionId);
+    } else {
+      // User needs to authenticate
+      console.log(`${process.env.WEB_URL}/login/${sessionId}`)
+      session.layouts.showTextWall(
+        'Please visit the following URL on your phone or computer to connect your Spotify account:\n\n' +
+        `${process.env.WEB_URL}/login/${sessionId}`
       );
-      return;
     }
-    
-    // Set access token
-    this.spotifyApi.setAccessToken(userData.accessToken);
-    
-    // Initial now playing info
-    await this.updateNowPlaying(session);
-    
-    // Set up event handlers
+
+    // Handle cleanup when session ends
     const cleanup = [
-      // Periodically update the now playing information
-      setInterval(async () => {
-        await this.updateNowPlaying(session);
-      }, 5000),
-      
-      // Handle head position for navigation
-      session.events.onHeadPosition(async (data) => {
-        if (data.position === 'up') {
-          // Skip to next track
-          try {
-            await this.spotifyApi.skipToNext();
-            session.layouts.showTextWall("Skipped to next track", { durationMs: 2000 });
-            
-            // Wait a moment for Spotify to update
-            setTimeout(async () => {
-              await this.updateNowPlaying(session);
-            }, 500);
-          } catch (error) {
-            console.error('Error skipping track:', error);
-            session.layouts.showReferenceCard("Error", "Failed to skip track");
-          }
-        } else if (data.position === 'down') {
-          // Skip to previous track
-          try {
-            await this.spotifyApi.skipToPrevious();
-            session.layouts.showTextWall("Skipped to previous track", { durationMs: 2000 });
-            
-            // Wait a moment for Spotify to update
-            setTimeout(async () => {
-              await this.updateNowPlaying(session);
-            }, 500);
-          } catch (error) {
-            console.error('Error skipping to previous track:', error);
-            session.layouts.showReferenceCard("Error", "Failed to skip to previous track");
-          }
+      // Listen for user command via transcription
+      session.events.onTranscription((data) => {
+        if (data.isFinal && data.text.toLowerCase().includes('refresh spotify')) {
+          this.updateNowPlaying(session, sessionId);
         }
       }),
-      
-      // Handle button press for play/pause
-      session.events.onButtonPress(async (data) => {
-        if (data.type === 'single') {
-          try {
-            const playbackState = await this.spotifyApi.getMyCurrentPlaybackState();
-            
-            if (playbackState.body && playbackState.body.is_playing) {
-              await this.spotifyApi.pause();
-              session.layouts.showTextWall("Paused", { durationMs: 2000 });
-            } else {
-              await this.spotifyApi.play();
-              session.layouts.showTextWall("Playing", { durationMs: 2000 });
-            }
-            
-            // Wait a moment for Spotify to update
-            setTimeout(async () => {
-              await this.updateNowPlaying(session);
-            }, 500);
-          } catch (error) {
-            console.error('Error toggling playback:', error);
-            session.layouts.showReferenceCard("Error", "Failed to toggle playback");
-          }
-        }
-      }),
-      
-      // Handle voice commands
-      session.events.onTranscription(async (data) => {
-        if (data.isFinal) {
-          const text = data.text.toLowerCase();
-          
-          if (text.includes('play') || text.includes('resume')) {
-            try {
-              await this.spotifyApi.play();
-              session.layouts.showTextWall("Playing", { durationMs: 2000 });
-              setTimeout(() => this.updateNowPlaying(session), 500);
-            } catch (error) {
-              console.error('Error starting playback:', error);
-            }
-          } else if (text.includes('pause') || text.includes('stop')) {
-            try {
-              await this.spotifyApi.pause();
-              session.layouts.showTextWall("Paused", { durationMs: 2000 });
-              setTimeout(() => this.updateNowPlaying(session), 500);
-            } catch (error) {
-              console.error('Error pausing playback:', error);
-            }
-          } else if (text.includes('next') || text.includes('skip')) {
-            try {
-              await this.spotifyApi.skipToNext();
-              session.layouts.showTextWall("Skipped to next track", { durationMs: 2000 });
-              setTimeout(() => this.updateNowPlaying(session), 500);
-            } catch (error) {
-              console.error('Error skipping track:', error);
-            }
-          } else if (text.includes('previous') || text.includes('back')) {
-            try {
-              await this.spotifyApi.skipToPrevious();
-              session.layouts.showTextWall("Skipped to previous track", { durationMs: 2000 });
-              setTimeout(() => this.updateNowPlaying(session), 500);
-            } catch (error) {
-              console.error('Error skipping to previous track:', error);
-            }
-          }
-        }
-      }),
-      
+
       // Handle errors
       session.events.onError((error) => {
-        console.error('Session error:', error);
-        session.layouts.showReferenceCard("Error", error.message);
+        console.error('Error:', error);
+        session.layouts.showTextWall(`Error: ${error.message}`);
       })
     ];
-    
-    // Add cleanup handlers
-    cleanup.forEach(handler => {
-      if (typeof handler === 'function') {
-        this.addCleanupHandler(handler);
-      } else if (handler) {
-        // For intervals
-        this.addCleanupHandler(() => clearInterval(handler));
+
+    // Register cleanup handlers
+    cleanup.forEach(handler => this.addCleanupHandler(handler));
+  }
+
+  // Starts periodic updates of now playing information
+  private startNowPlayingUpdates(session: TpaSession, sessionId: string): void {
+    // Clear any existing interval
+    if (this.nowPlayingIntervals.has(sessionId)) {
+      clearInterval(this.nowPlayingIntervals.get(sessionId));
+    }
+
+    // Initial load of now playing
+    this.updateNowPlaying(session, sessionId);
+
+    // Periodic updates of now playing every 1 min (60000 ms) (Uncomment if you want periodic now playing showing)
+    // const interval = setInterval(() => {
+    //   this.updateNowPlaying(session, sessionId);
+    // }, 60000);
+
+    // this.nowPlayingIntervals.set(sessionId, interval);
+
+    // Add cleanup when session ends
+    this.addCleanupHandler(() => {
+      if (this.nowPlayingIntervals.get(sessionId)) {
+        clearInterval(this.nowPlayingIntervals.get(sessionId));
+        this.nowPlayingIntervals.delete(sessionId);
       }
     });
   }
-  
-  protected async onStop(sessionId: string): Promise<void> {
-    console.log(`Session ${sessionId} stopped`);
-  }
-  
-  private async updateNowPlaying(session: TpaSession) {
+
+  // Update the now playing information
+  private async updateNowPlaying(session: TpaSession, sessionId: string): Promise<void> {
+    const credentials = this.userTokens.get(sessionId);
+    // No credentials kill function (No one logged in)
+    if (!credentials) {
+      return;
+    }
+
+    // Check if token needs refreshing
+    if (Date.now() > credentials.expiresAt - 60000) {
+      try {
+        // Set the refresh token and refresh access token
+        this.spotifyApi.setRefreshToken(credentials.refreshToken);
+        const data = await this.spotifyApi.refreshAccessToken();
+
+        // Update stored credentials
+        this.userTokens.set(sessionId, {
+          accessToken: data.body.access_token,
+          refreshToken: credentials.refreshToken,
+          expiresAt: Date.now() + data.body.expires_in * 1000
+        });
+
+        // Set the new access token
+        this.spotifyApi.setAccessToken(data.body.access_token);
+      } catch (error) {
+        console.error('Token refresh error:', error);
+        session.layouts.showTextWall('Error refreshing Spotify connection. Please reconnect your account.');
+        return;
+      }
+    } else {
+      // Set the access token for this request
+      this.spotifyApi.setAccessToken(credentials.accessToken);
+    }
+
     try {
-      const data = await this.spotifyApi.getMyCurrentPlayingTrack();
-      
+      // Get the user's currently playing track
+      const data = await this.spotifyApi.getMyCurrentPlaybackState();
+
       if (data.body && data.body.item) {
         const track = data.body.item;
-        const artists = (track as any).artists.map((a: any) => a.name).join(', ');
-        const trackName = (track as any).name;
+        const artists = track.artists.map(artist => artist.name).join(', ');
         const isPlaying = data.body.is_playing;
-        
-        // Display now playing information
-        session.layouts.showReferenceCard(
-          `${isPlaying ? '▶️ Now Playing' : '⏸️ Paused'}`,
-          `${trackName}\nby ${artists}\n\n👆 Next Track\n👇 Previous Track\n👉 Press Button to Play/Pause`
+
+        // Display the ow playing information
+        session.layouts.showTextWall(
+          `${isPlaying ? 'Now Playing' : 'Paused'}\n\n` +
+          `Song: ${track.name}\n` +
+          `Artist: ${artists}\n` +
+          `Album: ${track.album.name}`,
+          { durationMs: 5000 }  // Show for 5 seconds
         );
       } else {
-        session.layouts.showReferenceCard(
-          "Spotify",
-          "No track currently playing\n\nPlay music on Spotify to see track information here."
-        );
+        // Nothing is playing
+        session.layouts.showTextWall('No track currently playing on spotify');
       }
     } catch (error) {
-      console.error('Error fetching now playing:', error);
-      session.layouts.showReferenceCard(
-        "Error",
-        "Failed to fetch now playing information. Please ensure Spotify is connected."
-      );
+      console.error('Spotify API error:', error);
+      session.layouts.showTextWall('Error connecting to spotify. Please try again.');
     }
   }
 }
 
-// Start the server
-const app = new SpotifyTPA({
-  packageName: 'org.example.spotify',
-  apiKey: process.env.AUGMENTOS_API_KEY || 'your_api_key',
-  port: 3000,
-  augmentOSWebsocketUrl: process.env.AUGMENTOS_WS_URL || 'wss://staging.augmentos.org/tpa-ws'
+const tpa = new MusicPlayer({
+  packageName: 'org.gikaeh.music-player-for-augment-os',
+  apiKey: process.env.AUGMENTOS_API_KEY || '',
+  port: process.env.PORT || 4040,
+  augmentOSWebsocketUrl: process.env.UGMENTOS_WS_URL || 'wss://staging.augmentos.org/tpa-ws'
 });
 
-app.start().catch(console.error);
+// Load env variables
+dotenv.config();
+
+console.log('=== Environment Variables ===');
+console.log(`URL: ${process.env.URL || '(not set, using default http://localhost:PORT)'}`);
+console.log(`PORT: ${process.env.PORT || '(not set, using default 4040)'}`);
+console.log(`AUGMENTOS_API_KEY: ${process.env.AUGMENTOS_API_KEY ? 'Set' : 'Not set'}`);
+console.log(`AUGMENTOS_WS_URL: ${process.env.AUGMENTOS_WS_URL || '(using default)'}`);
+console.log(`REDIRECT_URI: ${process.env.REDIRECT_URI ? 'Set' : 'Not set'}`);
+
+tpa.start().catch(console.error);

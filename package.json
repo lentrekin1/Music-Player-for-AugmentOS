@@ -9,14 +9,6 @@
       "dev": "ts-node src/index.ts",
       "watch": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts"
     },
-    "keywords": [
-      "augmentos",
-      "tpa",
-      "spotify",
-      "ar",
-      "smartglasses"
-    ],
-    "author": "Gino Nicosia",
     "dependencies": {
       "@augmentos/sdk": "latest",
       "dotenv": "^16.3.1",
