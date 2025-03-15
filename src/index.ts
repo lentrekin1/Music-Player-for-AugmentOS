@@ -199,7 +199,7 @@ class MusicPlayer extends TpaServer {
 const tpa = new MusicPlayer({
   packageName: 'org.gikaeh.music-player-for-augment-os',
   apiKey: process.env.AUGMENTOS_API_KEY || '',
-  port: process.env.PORT || 4040,
+  port: process.env.WEB_PORT || 4040,
   augmentOSWebsocketUrl: process.env.UGMENTOS_WS_URL || 'wss://staging.augmentos.org/tpa-ws'
 });
 
@@ -207,8 +207,8 @@ const tpa = new MusicPlayer({
 dotenv.config();
 
 console.log('=== Environment Variables ===');
-console.log(`URL: ${process.env.URL || '(not set, using default http://localhost:PORT)'}`);
-console.log(`PORT: ${process.env.PORT || '(not set, using default 4040)'}`);
+console.log(`URL: ${process.env.WEB_URL || '(not set, using default http://localhost:PORT)'}`);
+console.log(`PORT: ${process.env.WEB_PORT || '(not set, using default 4040)'}`);
 console.log(`AUGMENTOS_API_KEY: ${process.env.AUGMENTOS_API_KEY ? 'Set' : 'Not set'}`);
 console.log(`AUGMENTOS_WS_URL: ${process.env.AUGMENTOS_WS_URL || '(using default)'}`);
 console.log(`REDIRECT_URI: ${process.env.REDIRECT_URI ? 'Set' : 'Not set'}`);
