@@ -1,13 +1,11 @@
-import { TpaServer, TpaSession } from '@augmentos/sdk';
+import {TpaServer, TpaSession } from '@augmentos/sdk';
 import SpotifyWebApi from 'spotify-web-api-node';
-import express from 'express';
-import { SpotifyCredentials } from '../src/types';
+import {SpotifyCredentials, ButtonPress } from '../src/types';
 import dotenv from 'dotenv'
 
 class MusicPlayer extends TpaServer {
   private spotifyApi: SpotifyWebApi;
   private userTokens: Map<string, SpotifyCredentials> = new Map();
-  private nowPlayingIntervals: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(config: any) {
     super(config);
@@ -30,7 +28,8 @@ class MusicPlayer extends TpaServer {
       // Generate auth URL with necessary scopes (Spotify web-api scopes)
       const authUrl = this.spotifyApi.createAuthorizeURL([
         'user-read-currently-playing',
-        'user-read-playback-state'
+        'user-read-playback-state',
+        'user-modify-playback-state'
       ], state);
 
       res.redirect(authUrl);
@@ -38,7 +37,7 @@ class MusicPlayer extends TpaServer {
 
     // Handle callback from Spotify
     app.get('/callback', async(req, res) => {
-      const { code, state } = req.query;
+      const {code, state}= req.query;
       const sessionId = state as string;
 
       try {
@@ -57,7 +56,7 @@ class MusicPlayer extends TpaServer {
         // If there's a session active, display now playing information
         const session = this.activeSessions.get(sessionId);
         if (session) {
-          this.startNowPlayingUpdates(session, sessionId);
+          this.updateNowPlaying(session, sessionId, 'current');
         }
       } catch (error) {
         console.error('Authentication error:', error);
@@ -78,13 +77,13 @@ class MusicPlayer extends TpaServer {
     // Check if user is already authenticated with spotify
     if (this.userTokens.has(sessionId)) {
       // User is authenticated, start showing now playing info
-      this.startNowPlayingUpdates(session, sessionId);
+      this.updateNowPlaying(session, sessionId, 'current');
     } else {
       // User needs to authenticate
-      console.log(`${process.env.WEB_URL}/login/${sessionId}`)
+      console.log(`${process.env.WEB_URL || `http://localhost:${process.env.WEB_PORT}`}/login/${sessionId}`)
       session.layouts.showTextWall(
         'Please visit the following URL on your phone or computer to connect your Spotify account:\n\n' +
-        `${process.env.WEB_URL}/login/${sessionId}`
+        `${process.env.WEB_URL  || `http://localhost:${process.env.WEB_PORT}`}/login/${sessionId}`
       );
     }
 
@@ -92,10 +91,46 @@ class MusicPlayer extends TpaServer {
     const cleanup = [
       // Listen for user command via transcription
       session.events.onTranscription((data) => {
-        if (data.isFinal && data.text.toLowerCase().includes('refresh spotify')) {
-          this.updateNowPlaying(session, sessionId);
+        const current = ['current.', 'what\'s playing', 'now playing', 'current song']
+        const next = ['next.', 'next song', 'skip song'];
+        const back = ['back.', 'previous.', 'previous song', 'rewind.'];
+        const play = ['play.', 'play music', 'play song'];
+        const pause = ['pause.', 'pause music', 'pause song'];
+
+        console.log(data);
+        for (const item of current) {
+          if (data.isFinal && data.text.toLowerCase().includes(item)) {
+            this.updateNowPlaying(session, sessionId, 'current');
+          }
+        }
+        for (const item of next) {
+          if (data.isFinal && data.text.toLowerCase().includes(item)) {
+            this.updateNowPlaying(session, sessionId, 'next');
+          }
+        }
+        for (const item of back) {
+          if (data.isFinal && data.text.toLowerCase().includes(item)) {
+            this.updateNowPlaying(session, sessionId, 'back');
+          }
+        }
+        for (const item of play) {
+          if (data.isFinal && data.text.toLowerCase().includes(item)) {
+            this.updateNowPlaying(session, sessionId, 'play');
+          }
+        }
+        for (const item of pause) {
+          if (data.isFinal && data.text.toLowerCase().includes(item)) {
+            this.updateNowPlaying(session, sessionId, 'pause');
+          }
         }
       }),
+
+      // session.events.onButtonPress((data) => {
+      //   console.log(data)
+      //   if (data.pressType === 'long') {
+      //     this.updateNowPlaying(session, sessionId);
+      //   }
+      // }),
 
       // Handle errors
       session.events.onError((error) => {
@@ -108,34 +143,8 @@ class MusicPlayer extends TpaServer {
     cleanup.forEach(handler => this.addCleanupHandler(handler));
   }
 
-  // Starts periodic updates of now playing information
-  private startNowPlayingUpdates(session: TpaSession, sessionId: string): void {
-    // Clear any existing interval
-    if (this.nowPlayingIntervals.has(sessionId)) {
-      clearInterval(this.nowPlayingIntervals.get(sessionId));
-    }
-
-    // Initial load of now playing
-    this.updateNowPlaying(session, sessionId);
-
-    // Periodic updates of now playing every 1 min (60000 ms) (Uncomment if you want periodic now playing showing)
-    // const interval = setInterval(() => {
-    //   this.updateNowPlaying(session, sessionId);
-    // }, 60000);
-
-    // this.nowPlayingIntervals.set(sessionId, interval);
-
-    // Add cleanup when session ends
-    this.addCleanupHandler(() => {
-      if (this.nowPlayingIntervals.get(sessionId)) {
-        clearInterval(this.nowPlayingIntervals.get(sessionId));
-        this.nowPlayingIntervals.delete(sessionId);
-      }
-    });
-  }
-
   // Update the now playing information
-  private async updateNowPlaying(session: TpaSession, sessionId: string): Promise<void> {
+  private async updateNowPlaying(session: TpaSession, sessionId: string, type: string): Promise<void> {
     const credentials = this.userTokens.get(sessionId);
     // No credentials kill function (No one logged in)
     if (!credentials) {
@@ -169,29 +178,83 @@ class MusicPlayer extends TpaServer {
     }
 
     try {
-      // Get the user's currently playing track
-      const data = await this.spotifyApi.getMyCurrentPlaybackState();
+      // Switch statement for different actions in the spotify player
+      switch (type) {
+        case 'current':
+          this.displayCurrentlyPlaying(session)
+          break;
+          console.error
+        case 'next':
+          await this.spotifyApi.skipToNext();
+          this.updateNowPlaying(session, sessionId, 'current');
+          break;
+        
+        case 'back':
+          await this.spotifyApi.skipToPrevious();
+          this.updateNowPlaying(session, sessionId, 'current');
+          break;
+        
+        case 'play':
+          try {
+            await this.spotifyApi.play()
+            this.updateNowPlaying(session, sessionId, 'current')
+            break;  
+          } catch(error) {
+            console.error('Music play error:', error);
+            session.layouts.showTextWall('Error playing music.');
+            break;
+          }
 
-      if (data.body && data.body.item) {
-        const track = data.body.item;
-        const artists = track.artists.map(artist => artist.name).join(', ');
-        const isPlaying = data.body.is_playing;
-
-        // Display the ow playing information
-        session.layouts.showTextWall(
-          `${isPlaying ? 'Now Playing' : 'Paused'}\n\n` +
-          `Song: ${track.name}\n` +
-          `Artist: ${artists}\n` +
-          `Album: ${track.album.name}`,
-          { durationMs: 5000 }  // Show for 5 seconds
-        );
-      } else {
-        // Nothing is playing
-        session.layouts.showTextWall('No track currently playing on spotify');
+        case 'pause':
+          try {
+            await this.spotifyApi.pause()
+            this.updateNowPlaying(session, sessionId, 'current')
+            break;  
+          } catch(error) {
+            console.error('Music pause error:', error);
+            session.layouts.showTextWall('Error pausing music.', {durationMs: 5000});
+            break;
+          }
+        
+        // This should not be called unless theres an error or an implementation of a new type and no case
+        default:
+          console.error(`Error: updateNowPlaying switch has ${type} type`);
+          break;
       }
     } catch (error) {
       console.error('Spotify API error:', error);
       session.layouts.showTextWall('Error connecting to spotify. Please try again.');
+    }
+  }
+
+  private async displayCurrentlyPlaying(session: TpaSession): Promise<void> {
+    // Get the user's currently playing track
+    const data = await this.spotifyApi.getMyCurrentPlaybackState();
+    if (data.body && data.body.item) {
+      const track = data.body.item;
+      const artists = track.artists.map(artist => artist.name).join(', ');
+      const isPlaying = data.body.is_playing;
+
+      // Debug display (will clean up later)
+      console.log(
+        `${isPlaying ? 'Now Playing' : 'Paused'}\n\n` +
+        `Song: ${track.name}\n` +
+        `Artist: ${artists}\n` +
+        `Album: ${track.album.name}`
+      )
+
+      // Display the now playing information
+      session.layouts.showTextWall(
+        `${isPlaying ? 'Now Playing' : 'Paused'}\n\n` +
+        `Song: ${track.name}\n` +
+        `Artist: ${artists}\n` +
+        `Album: ${track.album.name}`,
+        {durationMs: 5000} // Show for 5 seconds
+      );
+    } else {
+      // Nothing is playing
+      console.log('No track currently playing on spotify')
+      session.layouts.showTextWall('No track currently playing on spotify', {durationMs: 5000});
     }
   }
 }
@@ -200,7 +263,7 @@ const tpa = new MusicPlayer({
   packageName: 'org.gikaeh.music-player-for-augment-os',
   apiKey: process.env.AUGMENTOS_API_KEY || '',
   port: process.env.WEB_PORT || 4040,
-  augmentOSWebsocketUrl: process.env.UGMENTOS_WS_URL || 'wss://staging.augmentos.org/tpa-ws'
+  augmentOSWebsocketUrl: process.env.AUGMENTOS_WS_URL || 'wss://staging.augmentos.org/tpa-ws'
 });
 
 // Load env variables
