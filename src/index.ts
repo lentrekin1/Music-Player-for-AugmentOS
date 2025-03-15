@@ -2,6 +2,8 @@ import {TpaServer, TpaSession } from '@augmentos/sdk';
 import SpotifyWebApi from 'spotify-web-api-node';
 import {SpotifyCredentials, ButtonPress } from '../src/types';
 import dotenv from 'dotenv'
+import fs from 'fs';
+import path from 'path';
 
 class MusicPlayer extends TpaServer {
   private spotifyApi: SpotifyWebApi;
@@ -16,6 +18,8 @@ class MusicPlayer extends TpaServer {
       clientSecret: process.env.SPOTIFY_CLIENT_SECRET || 'YOUR_CLIENT_SECRET',
       redirectUri: process.env.REDIRECT_URI || 'http://localhost:4040/callback'
     });
+
+    this.loadTokens();
 
     // Set up express server for auth callback
     const app = this.getExpressApp();
@@ -51,6 +55,8 @@ class MusicPlayer extends TpaServer {
           expiresAt: Date.now() + data.body.expires_in * 1000
         });
 
+        this.saveTokens();
+
         res.send('Authentication successful! You can close this window and return to your glasses.');
 
         // If there's a session active, display now playing information
@@ -68,6 +74,52 @@ class MusicPlayer extends TpaServer {
     app.listen(process.env.AUTH_PORT, () => {
       console.log(`Authentication server running on port ${process.env.AUTH_PORT}`);
     });
+  }
+
+  private saveTokens(): void {
+    // Convert Map to an object that can be serialized
+    const tokensObj = Object.fromEntries(this.userTokens);
+    
+    // Create a data directory if it doesn't exist
+    const dataDir = path.join(__dirname, '../data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    
+    // Write tokens to a JSON file
+    fs.writeFileSync(
+      path.join(dataDir, 'spotify_tokens.json'), 
+      JSON.stringify(tokensObj, null, 2)
+    );
+    console.log('Tokens saved to file');
+  }
+  
+  private loadTokens(): void {
+    try {
+      const filePath = path.join(__dirname, '../data/spotify_tokens.json');
+      if (fs.existsSync(filePath)) {
+        const fileContent = fs.readFileSync(filePath, 'utf8');
+        const tokensObj = JSON.parse(fileContent);
+        
+        // Convert the plain object back to a Map
+        this.userTokens = new Map(Object.entries(tokensObj));
+        console.log(`Loaded ${this.userTokens.size} tokens from storage`);
+      } else {
+        console.log('No saved tokens found');
+      }
+    } catch (error) {
+      console.error('Error loading tokens:', error);
+      // Keep the current empty Map if there's an error
+    }
+  }
+
+  // Add this method to MusicPlayer class
+  private removeUserToken(sessionId: string): void {
+    if (this.userTokens.has(sessionId)) {
+      this.userTokens.delete(sessionId);
+      this.saveTokens();
+      console.log(`Removed token for session ${sessionId}`);
+    }
   }
 
   // Called when new user connects to app
@@ -164,6 +216,8 @@ class MusicPlayer extends TpaServer {
           refreshToken: credentials.refreshToken,
           expiresAt: Date.now() + data.body.expires_in * 1000
         });
+
+        this.saveTokens();
 
         // Set the new access token
         this.spotifyApi.setAccessToken(data.body.access_token);
