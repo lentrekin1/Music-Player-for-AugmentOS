@@ -4,6 +4,7 @@ import {SpotifyCredentials, ButtonPress } from '../src/types';
 import dotenv from 'dotenv'
 import fs from 'fs';
 import path from 'path';
+import { setTimeout } from "timers/promises";
 
 class MusicPlayer extends TpaServer {
   private spotifyApi: SpotifyWebApi;
@@ -133,8 +134,8 @@ class MusicPlayer extends TpaServer {
     } else {
       // User needs to authenticate
       console.log(`${process.env.WEB_URL || `http://localhost:${process.env.WEB_PORT}`}/login/${sessionId}`)
-      session.layouts.showTextWall(
-        'Please visit the following URL on your phone or computer to connect your Spotify account:\n\n' +
+      session.layouts.showDoubleTextWall(
+        'Please visit the following URL on your phone or computer to connect your Spotify account:',
         `${process.env.WEB_URL  || `http://localhost:${process.env.WEB_PORT}`}/login/${sessionId}`
       );
     }
@@ -183,6 +184,7 @@ class MusicPlayer extends TpaServer {
       //     this.updateNowPlaying(session, sessionId);
       //   }
       // }),
+
 
       // Handle errors
       session.events.onError((error) => {
@@ -235,6 +237,7 @@ class MusicPlayer extends TpaServer {
       // Switch statement for different actions in the spotify player
       switch (type) {
         case 'current':
+          await setTimeout(500)
           this.displayCurrentlyPlaying(session)
           break;
           console.error
