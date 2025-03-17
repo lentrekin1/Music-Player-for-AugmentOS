@@ -1,4 +1,4 @@
-# MusicPlayer - Music Player for AugmentOS
+# Music Player - Music Player for AugmentOS
 
 Music Player is an app that allows for integration with spotify to control your music with Augment OS. Allowing you to see your current playing song or change music through glasses that are compatible with Augment OS.
 
