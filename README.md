@@ -10,13 +10,13 @@ Music Player is an app that allows for integration with spotify to control your 
 
    ```
    AUGMENTOS_API_KEY=your_augment_api_key
-   AUGMENTOS_WS_URL=wss://staging.augmentos.org/tpa-ws (optional)
+   AUGMENTOS_WS_URL=wss://staging.augmentos.org/tpa-ws #(optional)
    SPOTIFY_CLIENT_ID=your_spotify_client_id
    SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
-   WEB_URL=http://localhost (optional: switch with ngrok if using)
-   WEB_PORT=4040 (optional)
-   REDIRECT_URI=http://localhost:4040/callback (optional: switch with ngrok if using)
-   AUTH_PORT=4041 (optional)
+   WEB_URL=http://localhost #(optional: switch with ngrok if using)
+   WEB_PORT=4040 #(optional)
+   REDIRECT_URI=http://localhost:4040/callback #(optional: switch with ngrok if using)
+   AUTH_PORT=4041 #(optional)
    ```
 2. Install dependencies:
 
