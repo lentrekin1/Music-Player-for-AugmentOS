@@ -30,7 +30,6 @@ export async function handlePlayerCommand(session: TpaSession, sessionId: string
   try {
     switch (command) {
       case PlayerCommand.CURRENT:
-        await setTimeout(500);
         await displayCurrentlyPlaying(session, sessionId);
         break;
 
@@ -83,6 +82,7 @@ export async function displayCurrentlyPlaying(session: TpaSession, sessionId: st
       return;
     }
 
+    await setTimeout(500)
     const playbackInfo = await spotifyService.getCurrentlyPlaying(sessionId);
     
     if (playbackInfo.trackName) {
