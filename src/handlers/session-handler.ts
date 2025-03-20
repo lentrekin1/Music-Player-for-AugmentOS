@@ -1,8 +1,7 @@
-import { TpaSession } from '@augmentos/sdk';
-import { spotifyService } from '../services/spotify-service';
-import { tokenService } from '../services/token-service';
-import { config } from '../config/environment';
-import { setTimeout } from 'timers/promises';
+import {TpaSession} from '@augmentos/sdk';
+import {spotifyService} from '../services/spotify-service';
+import {tokenService} from '../services/token-service';
+import {setTimeout} from 'timers/promises';
 
 // Player command actions
 export enum PlayerCommand {
@@ -110,7 +109,6 @@ export async function displayCurrentlyPlaying(session: TpaSession, sessionId: st
 }
 
 // Set up session event handlers
-// Set up session event handlers
 export function setupSessionHandlers(session: TpaSession, sessionId: string): Array<() => void> {
   const cleanupHandlers: Array<() => void> = [];
 
@@ -119,7 +117,7 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string): Ar
     const commandMappings = {
       [PlayerCommand.CURRENT]: ['current.', 'what\'s playing', 'now playing', 'current song'],
       [PlayerCommand.NEXT]: ['next.', 'next song', 'skip song'],
-      [PlayerCommand.BACK]: ['back.', 'previous.', 'previous song', 'rewind.'],
+      [PlayerCommand.BACK]: ['back.', 'previous.', 'previous song'],
       [PlayerCommand.PLAY]: ['play.', 'play music', 'play song'],
       [PlayerCommand.PAUSE]: ['pause.', 'pause music', 'pause song']
     };

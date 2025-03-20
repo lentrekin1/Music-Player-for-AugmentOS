@@ -1,8 +1,8 @@
-import { TpaServer, TpaSession } from '@augmentos/sdk';
-import { createExpressApp } from './app';
-import { config } from './config/environment';
-import { tokenService } from './services/token-service';
-import { setupSessionHandlers, displayCurrentlyPlaying } from './handlers/session-handler';
+import {TpaServer, TpaSession} from '@augmentos/sdk';
+import {createExpressApp} from './app';
+import {config} from './config/environment';
+import {tokenService} from './services/token-service';
+import {setupSessionHandlers, displayCurrentlyPlaying} from './handlers/session-handler';
 
 // Keep track of active sessions
 export const activeSessions = new Map<string, TpaSession>();

@@ -1,8 +1,6 @@
 import SpotifyWebApi from 'spotify-web-api-node';
-import { TpaSession } from '@augmentos/sdk';
-import { tokenService } from './token-service';
-import { config } from '../config/environment';
-import { setTimeout } from 'timers/promises';
+import {tokenService} from './token-service';
+import {config} from '../config/environment';
 
 export class SpotifyService {
   private spotifyApi: SpotifyWebApi;

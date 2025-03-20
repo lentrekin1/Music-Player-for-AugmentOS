@@ -1,6 +1,5 @@
 import express from 'express';
-import { authRoutes } from './controllers/auth-controller';
-import { config } from './config/environment';
+import {authRoutes} from './controllers/auth-controller';
 
 export function createExpressApp() {
   const app = express();

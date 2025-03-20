@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { SpotifyCredentials } from '../types';
+import {SpotifyCredentials} from '../types';
 
 export class TokenService {
   private userTokens: Map<string, SpotifyCredentials> = new Map();
