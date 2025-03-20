@@ -1,6 +1,6 @@
 import {TpaServer, TpaSession } from '@augmentos/sdk';
 import SpotifyWebApi from 'spotify-web-api-node';
-import {SpotifyCredentials, ButtonPress } from '../src/types';
+import {SpotifyCredentials} from '../src/types';
 import dotenv from 'dotenv'
 import fs from 'fs';
 import path from 'path';
