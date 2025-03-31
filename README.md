@@ -17,6 +17,7 @@ Music Player is an app that allows for integration with spotify to control your 
    WEB_PORT=4040 #(optional)
    REDIRECT_URI=http://localhost:4040/callback #(optional: switch with ngrok if using)
    AUTH_PORT=4041 #(optional)
+   TOKEN_ENCRYPTION_KEY=
    ```
 2. Install dependencies:
 
@@ -26,7 +27,7 @@ Music Player is an app that allows for integration with spotify to control your 
 3. Build and start the server:
 
    ```
-   bun run src/index.ts
+   bun run index.ts
    ```
 
 ### Voice Commands
@@ -42,11 +43,9 @@ Music Player is an app that allows for integration with spotify to control your 
 ### Adding Controls
 
 1. Add touch controls for playing, skipping, & rewinding songs
+2. Play music on last device or selection of device
+3. Pick playlist
 
 ### Planned
 
 1. Apple Music integration
-
-## License
-
-MIT
