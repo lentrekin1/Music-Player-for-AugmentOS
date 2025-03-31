@@ -18,6 +18,9 @@ export const config = {
     apiKey: process.env.AUGMENTOS_API_KEY || '',
     websocketUrl: process.env.AUGMENTOS_WS_URL || 'wss://staging.augmentos.org/tpa-ws',
     packageName: 'org.gikaeh.music-player-for-augment-os'
+  },
+  encryption: {
+    key: process.env.TOKEN_ENCRYPTION_KEY
   }
 };
 

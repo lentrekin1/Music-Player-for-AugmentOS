@@ -2,6 +2,7 @@ import {TpaSession} from '@augmentos/sdk';
 import {spotifyService} from '../services/spotify-service';
 import {tokenService} from '../services/token-service';
 import {setTimeout} from 'timers/promises';
+import {DeviceInfo} from '../types'
 
 // Player command actions
 export enum PlayerCommand {
@@ -16,14 +17,14 @@ export enum PlayerCommand {
 export async function handlePlayerCommand(session: TpaSession, sessionId: string, command: PlayerCommand): Promise<void> {
   // Check if user is authenticated
   if (!tokenService.hasToken(sessionId)) {
-    session.layouts.showTextWall('Please connect your Spotify account first.', { durationMs: 5000 });
+    session.layouts.showTextWall('Please connect your Spotify account first.', {durationMs: 5000});
     return;
   }
 
   // Refresh token if needed
   const tokenValid = await spotifyService.refreshTokenIfNeeded(sessionId);
   if (!tokenValid) {
-    session.layouts.showTextWall('Error refreshing Spotify connection. Please reconnect your account.');
+    session.layouts.showTextWall('Error refreshing Spotify connection. Please reconnect your account.', {durationMs: 5000});
     return;
   }
 
@@ -49,7 +50,7 @@ export async function handlePlayerCommand(session: TpaSession, sessionId: string
           await displayCurrentlyPlaying(session, sessionId);
         } catch (error) {
           console.error('Music play error:', error);
-          session.layouts.showTextWall('Error playing music.', { durationMs: 5000 });
+          session.layouts.showTextWall('Error playing music.', {durationMs: 5000});
         }
         break;
 
@@ -59,7 +60,7 @@ export async function handlePlayerCommand(session: TpaSession, sessionId: string
           await displayCurrentlyPlaying(session, sessionId);
         } catch (error) {
           console.error('Music pause error:', error);
-          session.layouts.showTextWall('Error pausing music.', { durationMs: 5000 });
+          session.layouts.showTextWall('Error pausing music.', {durationMs: 5000});
         }
         break;
       
@@ -69,7 +70,7 @@ export async function handlePlayerCommand(session: TpaSession, sessionId: string
     }
   } catch (error) {
     console.error('Spotify API error:', error);
-    session.layouts.showTextWall('Error connecting to Spotify. Please try again.', { durationMs: 5000 });
+    session.layouts.showTextWall('Error connecting to Spotify. Please try again.', {durationMs: 5000});
   }
 }
 
@@ -96,15 +97,15 @@ export async function displayCurrentlyPlaying(session: TpaSession, sessionId: st
       console.log(displayText);
       
       // Display the now playing information
-      session.layouts.showTextWall(displayText, { durationMs: 5000 });
+      session.layouts.showTextWall(displayText, {durationMs: 5000});
     } else {
       // Nothing is playing
       console.log('No track currently playing on Spotify');
-      session.layouts.showTextWall('No track currently playing on Spotify', { durationMs: 5000 });
+      session.layouts.showTextWall('No track currently playing on Spotify', {durationMs: 5000});
     }
   } catch (error) {
     console.error('Error displaying current track:', error);
-    session.layouts.showTextWall('Error getting track information', { durationMs: 5000 });
+    session.layouts.showTextWall('Error getting track information', {durationMs: 5000});
   }
 }
 
@@ -155,4 +156,41 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string): Ar
   
   // Return all cleanup handlers
   return cleanupHandlers;
+}
+
+export async function displayDevices(session: TpaSession, sessionId: string): Promise<void> {
+  const devices = await spotifyService.getDevice(sessionId);
+  const deviceArray: DeviceInfo[] = devices.map((device) => {
+    return {
+      name: device.name,
+      type: device.type,
+      id: device.id
+    }
+  });
+
+  console.log(deviceArray);
+  if (deviceArray.length === 0) {
+    session.layouts.showTextWall('Open spotify on a device to begin.');
+  } else if (deviceArray.length === 1) {
+    session.layouts.showTextWall(
+      `Playing on device: ${deviceArray[0].name}`, 
+      {durationMs: 5000}
+    );
+    await spotifyService.setDevice(sessionId, [deviceArray[0].id]);
+  } else if (deviceArray.length === 2) {
+    session.layouts.showTextWall(
+      'Select a device for playback:\n\n' +
+      `1: ${deviceArray[0].name}; ${deviceArray[0].type}\n` +
+      `2: ${deviceArray[1].name}; ${deviceArray[1].type}\n`,
+      {durationMs: 5000}
+    )
+  } else if (deviceArray.length === 3) {
+    session.layouts.showTextWall(
+      'Select a device for playback:\n\n' +
+      `1: ${deviceArray[0].name}; ${deviceArray[0].type}\n` +
+      `2: ${deviceArray[1].name}; ${deviceArray[1].type}\n` +
+      `2: ${deviceArray[2].name}; ${deviceArray[2].type}\n`,
+      {durationMs: 5000}
+    )
+  }
 }

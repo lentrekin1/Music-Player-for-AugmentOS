@@ -138,6 +138,30 @@ export class SpotifyService {
     this.spotifyApi.setAccessToken(credentials.accessToken);
     await this.spotifyApi.skipToPrevious();
   }
+
+  public async getDevice(sessionId: string): Promise<SpotifyApi.UserDevice[]> {
+    const credentials = tokenService.getToken(sessionId);
+
+    if (!credentials) {
+      console.error('No token found for session', sessionId);
+    }
+
+    this.spotifyApi.setAccessToken(credentials.accessToken);
+    const devices = (await this.spotifyApi.getMyDevices()).body.devices;
+
+    return devices;
+  }
+
+  public async setDevice(sessionId: string, deviceId: string[]): Promise<void> {
+    const credentials = tokenService.getToken(sessionId);
+
+    if (!credentials) {
+      console.error('No token found for session', sessionId);
+    }
+
+    this.spotifyApi.setAccessToken(credentials.accessToken);
+    await this.spotifyApi.transferMyPlayback(deviceId);
+  }
 }
 
 export const spotifyService = new SpotifyService();

@@ -49,9 +49,9 @@ export class MusicPlayerServer extends TpaServer {
       // User needs to authenticate
       const loginUrl = `${config.server.webUrl}/login/${sessionId}`;
       console.log(loginUrl);
-      session.layouts.showDoubleTextWall(
-        'Please visit the following URL on your phone or computer to connect your Spotify account:',
-        loginUrl
+      session.layouts.showTextWall(
+        `Please visit the following URL on your phone or computer to connect your Spotify account: ${loginUrl}`,
+        {durationMs: 5000}
       );
     }
 
