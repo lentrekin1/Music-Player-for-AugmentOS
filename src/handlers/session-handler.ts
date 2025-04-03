@@ -10,7 +10,8 @@ export enum PlayerCommand {
   NEXT = 'next',
   BACK = 'back',
   PLAY = 'play',
-  PAUSE = 'pause'
+  PAUSE = 'pause',
+  FIND = 'find'
 }
 
 // Handle player commands
@@ -64,6 +65,11 @@ export async function handlePlayerCommand(session: TpaSession, sessionId: string
         }
         break;
       
+      case PlayerCommand.FIND:
+        try{
+
+        }
+
       default:
         console.error(`Error: updateNowPlaying switch has ${command} type`);
         break;
@@ -120,7 +126,8 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string): Ar
       [PlayerCommand.NEXT]: ['next.', 'next song', 'skip song'],
       [PlayerCommand.BACK]: ['back.', 'previous.', 'previous song'],
       [PlayerCommand.PLAY]: ['play.', 'play music', 'play song'],
-      [PlayerCommand.PAUSE]: ['pause.', 'pause music', 'pause song']
+      [PlayerCommand.PAUSE]: ['pause.', 'pause music', 'pause song'],
+      [PlayerCommand.FIND]: ['find song']
     };
 
     if (data.isFinal) {

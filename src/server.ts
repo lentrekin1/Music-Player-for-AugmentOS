@@ -51,7 +51,7 @@ export class MusicPlayerServer extends TpaServer {
       console.log(loginUrl);
       session.layouts.showTextWall(
         `Please visit the following URL on your phone or computer to connect your Spotify account: ${loginUrl}`,
-        {durationMs: 5000}
+        {durationMs: -1}
       );
     }
 

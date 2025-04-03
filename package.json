@@ -4,23 +4,23 @@
     "description": "Spotify TPA for AugmentOS Glasses",
     "main": "dist/index.js",
     "scripts": {
-      "build": "tsc",
-      "start": "node dist/index.js",
-      "dev": "ts-node src/index.ts",
-      "watch": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts"
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "dev": "ts-node src/index.ts",
+        "watch": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts"
     },
     "dependencies": {
-      "@augmentos/sdk": "latest",
-      "dotenv": "^16.3.1",
-      "express": "^4.18.2",
-      "spotify-web-api-node": "^5.0.2"
+        "@augmentos/sdk": "^1.1.1",
+        "dotenv": "^16.4.7",
+        "express": "^5.1.0",
+        "spotify-web-api-node": "^5.0.2"
     },
     "devDependencies": {
-      "@types/express": "^4.17.17",
-      "@types/node": "^20.4.5",
-      "@types/spotify-web-api-node": "^5.0.7",
-      "nodemon": "^3.0.1",
-      "ts-node": "^10.9.1",
-      "typescript": "^5.1.6"
+        "@types/express": "^5.0.1",
+        "@types/node": "^22.13.17",
+        "@types/spotify-web-api-node": "^5.0.11",
+        "nodemon": "^3.1.9",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.8.2"
     }
-  }
+}
