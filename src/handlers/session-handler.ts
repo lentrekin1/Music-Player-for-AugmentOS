@@ -93,14 +93,10 @@ export async function displayCurrentlyPlaying(session: TpaSession, sessionId: st
         `Artist: ${playbackInfo.artists}\n` +
         `Album: ${playbackInfo.albumName}`;
       
-      // Debug display
-      console.log(displayText);
-      
       // Display the now playing information
       session.layouts.showTextWall(displayText, {durationMs: 5000});
     } else {
       // Nothing is playing
-      console.log('No track currently playing on Spotify');
       session.layouts.showTextWall('No track currently playing on Spotify', {durationMs: 5000});
     }
   } catch (error) {
