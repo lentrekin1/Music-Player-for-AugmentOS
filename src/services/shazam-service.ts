@@ -17,12 +17,3 @@ export class ShazamService {
     }
 
 }
-
-const toptracks = await shazam.search_music(
-    "en-US",
-    "GB",
-    "you know the rules and so do I",
-    "1",
-    "0"
-  );
-console.log(toptracks.tracks.hits[0].heading.title)
