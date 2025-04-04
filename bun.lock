@@ -4,7 +4,7 @@
     "": {
       "name": "augmentos-spotify-tpa",
       "dependencies": {
-        "@augmentos/sdk": "latest",
+        "@augmentos/sdk": "^1.1.1",
         "dotenv": "^16.3.1",
         "express": "^4.18.2",
         "spotify-web-api-node": "^5.0.2",
@@ -20,7 +20,7 @@
     },
   },
   "packages": {
-    "@augmentos/sdk": ["@augmentos/sdk@1.0.11", "", { "dependencies": { "axios": "^1.8.1", "express": "^4.18.2", "jsonwebtoken": "^8.5.1" } }, "sha512-FhmnZWmk7GrpygE/nu4Xwr7m8Vs9TyJ95O15vuX5PvKg7uLIcmK3P5d8hG2OtSAVPWTfsC9pNXBW3EMVuXxrTA=="],
+    "@augmentos/sdk": ["@augmentos/sdk@1.1.1", "", { "dependencies": { "axios": "^1.8.1", "express": "^4.18.2", "jsonwebtoken": "^8.5.1" } }, "sha512-1C4NlF0yhw96/NuvqDlvtA4/3sE9p+BCqszk8SroUKAuSF1hkuLKj5O12Bg0Q1zGuaIS+Cdp0oEYk0UFEDAs2g=="],
 
     "@cspotcode/source-map-support": ["@cspotcode/source-map-support@0.8.1", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.9" } }, "sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw=="],
 
