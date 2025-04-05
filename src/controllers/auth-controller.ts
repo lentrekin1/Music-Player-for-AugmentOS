@@ -34,4 +34,18 @@ router.get('/callback', async (req: Request, res: Response) => {
   }
 });
 
+// router.post('/settings', async (req: Request, res: Response) => {
+//   try {
+//     const {userIdForSettings, settings} = req.body;
+    
+//     if (!userIdForSettings || !Array.isArray(settings)) {
+//       return res.status(400).json({error: 'Missing userId or settings array in payload'});
+//     }
+
+//     const result = await this.updateSettings()
+//   } catch {
+    
+//   }
+// })
+
 export const authRoutes = router;

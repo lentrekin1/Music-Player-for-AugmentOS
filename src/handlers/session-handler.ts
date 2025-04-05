@@ -11,7 +11,7 @@ export enum PlayerCommand {
   BACK = 'back',
   PLAY = 'play',
   PAUSE = 'pause',
-  FIND = 'find'
+  SHAZAM = 'shazam'
 }
 
 // Handle player commands
@@ -65,10 +65,10 @@ export async function handlePlayerCommand(session: TpaSession, sessionId: string
         }
         break;
       
-      case PlayerCommand.FIND:
-        try{
+      // case PlayerCommand.FIND:
+      //   try{
 
-        }
+      //   }
 
       default:
         console.error(`Error: updateNowPlaying switch has ${command} type`);
@@ -112,41 +112,51 @@ export async function displayCurrentlyPlaying(session: TpaSession, sessionId: st
 }
 
 // Set up session event handlers
-export function setupSessionHandlers(session: TpaSession, sessionId: string): Array<() => void> {
+export function setupSessionHandlers(session: TpaSession, sessionId: string, settings: {}): Array<() => void> {
   const cleanupHandlers: Array<() => void> = [];
 
-  // Listen for user command via transcription
-  const transcriptionHandler = session.events.onTranscription((data) => {
-    const commandMappings = {
-      [PlayerCommand.CURRENT]: ['current.', 'what\'s playing', 'now playing', 'current song'],
-      [PlayerCommand.NEXT]: ['next.', 'next song', 'skip song'],
-      [PlayerCommand.BACK]: ['back.', 'previous.', 'previous song'],
-      [PlayerCommand.PLAY]: ['play.', 'play music', 'play song'],
-      [PlayerCommand.PAUSE]: ['pause.', 'pause music', 'pause song'],
-      [PlayerCommand.FIND]: ['find song']
-    };
+  console.log(settings);
 
-    if (data.isFinal) {
-      const lowerText = data.text.toLowerCase();
-      
-      // Check each command type and its phrases
-      for (const [command, phrases] of Object.entries(commandMappings)) {
-        for (const phrase of phrases) {
-          if (lowerText.includes(phrase)) {
-            handlePlayerCommand(session, sessionId, command as PlayerCommand);
-            break;
+  // Listen for user command via transcription
+  if (settings.isVoiceCommands.value) {
+    const transcriptionHandler = session.events.onTranscription((data) => {
+      const commandMappings = {
+        [PlayerCommand.CURRENT]: ['current.', 'what\'s playing', 'now playing', 'current song'],
+        [PlayerCommand.NEXT]: ['next.', 'next song', 'skip song'],
+        [PlayerCommand.BACK]: ['back.', 'previous.', 'previous song'],
+        [PlayerCommand.PLAY]: ['play.', 'play music', 'play song'],
+        [PlayerCommand.PAUSE]: ['pause.', 'pause music', 'pause song'],
+        [PlayerCommand.SHAZAM]: ['shazam', 'find song']
+      };
+
+      if (data.isFinal) {
+        const lowerText = data.text.toLowerCase();
+        
+        // Check each command type and its phrases
+        for (const [command, phrases] of Object.entries(commandMappings)) {
+          for (const phrase of phrases) {
+            if (lowerText.includes(phrase)) {
+              handlePlayerCommand(session, sessionId, command as PlayerCommand);
+              break;
+            }
           }
         }
       }
-    }
-  });
+    });
+
+    cleanupHandlers.push(transcriptionHandler);
+  }
 
   // Head position events
-  const headPositionHandler = session.events.onHeadPosition((data) => {
-    if (data.position === 'up') {
-      handlePlayerCommand(session, sessionId, PlayerCommand.CURRENT);
-    }
-  });
+  if (settings.isHeadsUpDisplay.value) {
+    const headPositionHandler = session.events.onHeadPosition((data) => {
+      if (data.position === 'up') {
+        handlePlayerCommand(session, sessionId, PlayerCommand.CURRENT);
+      }
+    });
+
+    cleanupHandlers.push(headPositionHandler);
+  }
 
   // Error handler
   const errorHandler = session.events.onError((error) => {
@@ -155,7 +165,7 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string): Ar
   });
 
   // Add handlers to the cleanup array
-  cleanupHandlers.push(transcriptionHandler, headPositionHandler, errorHandler);
+  cleanupHandlers.push(errorHandler);
   
   // Return all cleanup handlers
   return cleanupHandlers;

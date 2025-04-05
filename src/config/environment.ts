@@ -16,8 +16,7 @@ export const config = {
   },
   augmentOS: {
     apiKey: process.env.AUGMENTOS_API_KEY || '',
-    websocketUrl: process.env.AUGMENTOS_WS_URL || 'wss://staging.augmentos.org/tpa-ws',
-    packageName: 'org.gikaeh.music-player-for-augment-os'
+    packageName: 'org.gikaeh.music-player-for-augment-os-test'
   },
   encryption: {
     key: process.env.TOKEN_ENCRYPTION_KEY
@@ -30,6 +29,5 @@ export function logEnvironment() {
   console.log(`URL: ${config.server.webUrl}`);
   console.log(`PORT: ${config.server.port}`);
   console.log(`AUGMENTOS_API_KEY: ${config.augmentOS.apiKey ? 'Set' : 'Not set'}`);
-  console.log(`AUGMENTOS_WS_URL: ${config.augmentOS.websocketUrl}`);
   console.log(`REDIRECT_URI: ${config.spotify.redirectUri ? 'Set' : 'Not set'}`);
 }
