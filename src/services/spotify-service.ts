@@ -1,6 +1,7 @@
 import SpotifyWebApi from 'spotify-web-api-node';
 import {tokenService} from './token-service';
 import {config} from '../config/environment';
+import logger from '../utils/logger'
 
 export class SpotifyService {
   private spotifyApi: SpotifyWebApi;
@@ -57,7 +58,16 @@ export class SpotifyService {
         this.spotifyApi.setAccessToken(data.body.access_token);
         return true;
       } catch (error) {
-        console.error('Token refresh error:', error);
+        logger.error('Token refresh error', {
+          sessionId: sessionId,
+          credentials: credentials,
+          error: {
+            message: error.message,
+            stack: error.stack,
+            responseStatus: error.response?.status,
+            responseBody: error.response?.data 
+          }
+        });
         return false;
       }
     } else {
@@ -71,7 +81,9 @@ export class SpotifyService {
     const credentials = tokenService.getToken(sessionId)
 
     if (!credentials) {
-      console.error('No token found for session', sessionId);
+      logger.warn(`No token found for session ${sessionId}`, {
+        sessionId: sessionId
+      });
       return {isPlaying: false};
     }
 
@@ -99,7 +111,9 @@ export class SpotifyService {
     const credentials = tokenService.getToken(sessionId)
 
     if (!credentials) {
-      console.error('No token found for session', sessionId);
+      logger.warn(`No token found for session ${sessionId}`, {
+        sessionId: sessionId
+      });
     }
 
     this.spotifyApi.setAccessToken(credentials.accessToken);
@@ -110,7 +124,9 @@ export class SpotifyService {
     const credentials = tokenService.getToken(sessionId)
 
     if (!credentials) {
-      console.error('No token found for session', sessionId);
+      logger.warn(`No token found for session ${sessionId}`, {
+        sessionId: sessionId
+      });
     }
 
     this.spotifyApi.setAccessToken(credentials.accessToken);
@@ -121,7 +137,9 @@ export class SpotifyService {
     const credentials = tokenService.getToken(sessionId)
 
     if (!credentials) {
-      console.error('No token found for session', sessionId);
+      logger.warn(`No token found for session ${sessionId}`, {
+        sessionId: sessionId
+      });
     }
 
     this.spotifyApi.setAccessToken(credentials.accessToken);
@@ -132,7 +150,9 @@ export class SpotifyService {
     const credentials = tokenService.getToken(sessionId)
 
     if (!credentials) {
-      console.error('No token found for session', sessionId);
+      logger.warn(`No token found for session ${sessionId}`, {
+        sessionId: sessionId
+      });
     }
 
     this.spotifyApi.setAccessToken(credentials.accessToken);
@@ -143,7 +163,9 @@ export class SpotifyService {
     const credentials = tokenService.getToken(sessionId);
 
     if (!credentials) {
-      console.error('No token found for session', sessionId);
+      logger.warn(`No token found for session ${sessionId}`, {
+        sessionId: sessionId
+      });
     }
 
     this.spotifyApi.setAccessToken(credentials.accessToken);
@@ -156,7 +178,9 @@ export class SpotifyService {
     const credentials = tokenService.getToken(sessionId);
 
     if (!credentials) {
-      console.error('No token found for session', sessionId);
+      logger.warn(`No token found for session ${sessionId}`, {
+        sessionId: sessionId
+      });
     }
 
     this.spotifyApi.setAccessToken(credentials.accessToken);

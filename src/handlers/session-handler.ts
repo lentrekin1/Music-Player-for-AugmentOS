@@ -1,9 +1,11 @@
 import {TpaSession} from '@augmentos/sdk';
-import {spotifyService} from '../services/spotify-service';
-import {tokenService} from '../services/token-service';
 import {setTimeout as sleep} from 'timers/promises';
+import logger from '../utils/logger'
 import {DeviceInfo, SessionState} from '../types'
+import {tokenService} from '../services/token-service';
+import {spotifyService} from '../services/spotify-service';
 import {shazamService} from '../services/shazam-service';
+import { stat } from 'fs';
 
 // Player command actions
 export enum PlayerCommand {
@@ -38,18 +40,20 @@ const triggerPhases = {
 // Set up session event handlers
 export function setupSessionHandlers(session: TpaSession, sessionId: string, settings: any): Array<() => void> {
   const cleanupHandlers: Array<() => void> = [];
-  // console.log(settings);
+  logger.debug(settings);
 
   sessionStates.set(sessionId, {mode: SessionMode.IDLE, timeoutId: null});
-  console.log(`[Session ${sessionId}] Initialized session state to IDLE.`);
+  logger.info(`[Session ${sessionId}] Initialized session state to IDLE.`);
 
   // Listen for user command via transcription
   if (settings.isVoiceCommands?.value) {
     const transcriptionHandler = session.events.onTranscription(async (data) => {
+      logger.debug(`[Session ${sessionId}] Received transcription data.`, { isFinal: data.isFinal, textLength: data.text?.length, sessionId: sessionId });
       if (!data.isFinal) return;
       const lowerText = data.text.toLowerCase().trim()
       if (lowerText === '') return;
       const currentState = getSessionState(sessionId);
+      logger.debug(`[Session ${sessionId}] Processing final transcript in mode: ${SessionMode[currentState.mode]}`, { transcript: lowerText, state: currentState, sessionId: sessionId });
 
       switch (currentState.mode) {
         case SessionMode.IDLE:
@@ -98,7 +102,11 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, set
         //   break;
 
         default:
-          console.warn(`[Session ${sessionId}] Unandled session mode: ${currentState.mode}`);
+          logger.warn(`[Session ${sessionId}] Unhandled session mode: ${currentState.mode}`, {
+            sessionId: sessionId,
+            userId: sessionId,
+            modeValue: currentState.mode
+          });
           setSessionMode(session, sessionId, SessionMode.IDLE);
       }
     });
@@ -123,7 +131,16 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, set
 
   // Error handler
   const errorHandler = session.events.onError((error) => {
-    console.error('Error:', error);
+    logger.error(`Error`, {
+      sessionId: sessionId,
+      settings: settings,
+      error: {
+        message: error.message,
+        stack: error.stack,
+        responseStatus: error.response?.status,
+        responseBody: error.response?.data 
+      }
+    });
     session.layouts.showTextWall(`Error: ${error.message}`);
   });
 
@@ -136,7 +153,9 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, set
       clearTimeout(state.timeoutId);
     }
     sessionStates.delete(sessionId);
-    console.log(`[Session ${sessionId}] Cleaned up session state.`);
+    logger.info(`[Session ${sessionId}] Cleaned up session state.`, {
+      sessionId: sessionId 
+    });
   };
 
   cleanupHandlers.push(stateCleanup);
@@ -181,7 +200,16 @@ async function handlePlayerCommand(session: TpaSession, sessionId: string, comma
           await spotifyService.playTrack(sessionId);
           await displayCurrentlyPlaying(session, sessionId);
         } catch (error) {
-          console.error('Music play error:', error);
+          logger.error(`Music play error`, {
+            sessionId: sessionId,
+            command: command,
+            error: {
+              message: error.message,
+              stack: error.stack,
+              responseStatus: error.response?.status,
+              responseBody: error.response?.data 
+            }
+          });
           session.layouts.showTextWall('Error playing music.', {durationMs: 5000});
         }
         break;
@@ -191,17 +219,38 @@ async function handlePlayerCommand(session: TpaSession, sessionId: string, comma
           await spotifyService.pauseTrack(sessionId);
           await displayCurrentlyPlaying(session, sessionId);
         } catch (error) {
-          console.error('Music pause error:', error);
+          logger.error(`Music pause error`, {
+            sessionId: sessionId,
+            command: command,
+            error: {
+              message: error.message,
+              stack: error.stack,
+              responseStatus: error.response?.status,
+              responseBody: error.response?.data 
+            }
+          });
           session.layouts.showTextWall('Error pausing music.', {durationMs: 5000});
         }
         break;
 
       default:
-        console.warn(`Unhandled player command: ${command}`);
+        logger.warn(`Unhandled player command: ${command}`, {
+          sessionId: sessionId,
+          command: command
+        });
         break;
     }
   } catch (error){
-    console.error(`Spotify API error during command ${command}:`, error);
+    logger.error(`Spotify API error during command ${command}`, {
+      sessionId: sessionId,
+      command: command,
+      error: {
+        message: error.message,
+        stack: error.stack,
+        responseStatus: error.response?.status,
+        responseBody: error.response?.data 
+      }
+    });
     let userMessage = 'Error executing command. Please try again.';
 
     if (error.response?.data?.error?.message) { 
@@ -225,6 +274,10 @@ export async function displayCurrentlyPlaying(session: TpaSession, sessionId: st
 
     await sleep(500)
     const playbackInfo = await spotifyService.getCurrentlyPlaying(sessionId);
+    logger.debug(`[Session ${sessionId}] Fetched playback info from Spotify.`, {
+      playbackInfo: playbackInfo,
+      sessionId: sessionId
+    });
     
     if (playbackInfo && playbackInfo.trackName) {
       const displayText = 
@@ -240,14 +293,24 @@ export async function displayCurrentlyPlaying(session: TpaSession, sessionId: st
       session.layouts.showTextWall('No track currently playing on Spotify', {durationMs: 5000});
     }
   } catch (error) {
-    console.error('Error displaying current track:', error);
+    logger.error(`Error displaying current track`, {
+      sessionId: sessionId,
+      error: {
+        message: error.message,
+        stack: error.stack,
+        responseStatus: error.response?.status,
+        responseBody: error.response?.data 
+      }
+    });
     session.layouts.showTextWall('Error getting track information', {durationMs: 5000});
   }
 }
 
 function getSessionState(sessionId: string): SessionState {
   if (!sessionStates.has(sessionId)) {
-    console.warn(`[Session ${sessionId}] State not found, initializing to IDLE.`);
+    logger.warn(`[Session ${sessionId}] State not found, initializing to IDLE.`, {
+      sessionId: sessionId
+    });
     sessionStates.set(sessionId, {mode: SessionMode.IDLE, timeoutId: null});
   }
 
@@ -264,6 +327,10 @@ function setSessionMode(session: TpaSession, sessionId: string, newMode: Session
   let newTimeoutId: NodeJS.Timeout | null = null;
   if (options?.timeoutMs) {
     newTimeoutId = setTimeout(() => {
+      logger.info(`[Session ${sessionId}] Timeout reached for mode ${SessionMode[newMode]}. Resetting to IDLE.`, {
+        sessionId: sessionId,
+        newMode: SessionMode[newMode]
+      })
       const timedOutState = sessionStates.get(sessionId);
       if (timedOutState && timedOutState.mode === newMode) {
         sessionStates.set(sessionId, {...timedOutState, mode: SessionMode.IDLE, timeoutId: null, data: undefined});
@@ -279,6 +346,12 @@ function setSessionMode(session: TpaSession, sessionId: string, newMode: Session
   };
 
   sessionStates.set(sessionId, newState);
+  logger.info(`[Session ${sessionId}] Mode changed to ${SessionMode[newMode]}`, {
+    newMode: SessionMode[newMode],
+    sessionId: sessionId,
+    hasData: options?.data !== undefined,
+    timeoutSet: options?.timeoutMs !== undefined,
+  });
 }
 
 async function enterShazamMode(session: TpaSession, sessionId: string): Promise<void> {
@@ -313,13 +386,24 @@ async function handleShazamInput(session: TpaSession, sessionId: string, transcr
       session.layouts.showTextWall(`Could not identify song for "${transcript.substring(0, 30)}${transcript.length > 30 ? '...' : ''}"`, {durationMs: 5000});
     }
   } catch (error) {
-    console.error(`[Session ${sessionId}] Shazam service error:`, error);
+    logger.error(`[Session ${sessionId}] Shazam service error`, {
+      sessionId: sessionId,
+      transcript: transcript,
+      error: {
+        message: error.message,
+        stack: error.stack,
+        responseStatus: error.response?.status,
+        responseBody: error.response?.data 
+      }
+    });
     session.layouts.showTextWall('Error identifying song via Shazam.', {durationMs: 5000});
   }
 }
 
 async function triggerShazam(session: TpaSession, sessionId: string): Promise<void> {
-  console.log(`[Session ${sessionId}] Triggering shazam listening mode.`);
+  logger.info(`[Session ${sessionId}] Triggering shazam listening mode.`, {
+    sessionId: sessionId
+  });
   await enterShazamMode(session, sessionId);
 }
 
