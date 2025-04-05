@@ -12,8 +12,8 @@ export class MusicPlayerServer extends TpaServer {
   // Use a different name to avoid collision with parent class
   private sessionHandlers: Array<() => void> = [];
   private appSettings = {
-    isHeadsUpDisplay: false,
-    isVoiceCommands: true
+    isHeadsUpDisplay: undefined,
+    isVoiceCommands: undefined
   };
 
   constructor() {
@@ -108,7 +108,7 @@ export class MusicPlayerServer extends TpaServer {
 
       this.appSettings.isHeadsUpDisplay = settings.find((s: any) => s.key === 'heads_up_display');
       this.appSettings.isVoiceCommands = settings.find((s: any) => s.key === 'voice_commands');
-      console.log(`Applied settings for user ${userId}: headsUpDisplay=${this.appSettings.isHeadsUpDisplay}, voiceCommands=${this.appSettings.isVoiceCommands}`);
+      console.log(`Applied settings for user ${userId}: headsUpDisplay=${this.appSettings.isHeadsUpDisplay.value}, voiceCommands=${this.appSettings.isVoiceCommands.value}`);
     } catch (error){
       console.error(`Error fetching settings for user ${userId}:`, error);
     }

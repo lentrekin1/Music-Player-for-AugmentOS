@@ -92,7 +92,7 @@ export class SpotifyService {
       };
     }
     
-    return { isPlaying: false };
+    return {isPlaying: false};
   }
 
   public async playTrack(sessionId: string): Promise<void> {

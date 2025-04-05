@@ -16,7 +16,7 @@ export const config = {
   },
   augmentOS: {
     apiKey: process.env.AUGMENTOS_API_KEY || '',
-    packageName: 'org.gikaeh.music-player-for-augment-os-test'
+    packageName: process.env.AUGMENTOS_PACKAGE_NAME || 'org.gikaeh.music-player-for-augment-os'
   },
   encryption: {
     key: process.env.TOKEN_ENCRYPTION_KEY
