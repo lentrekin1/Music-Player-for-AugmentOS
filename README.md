@@ -17,7 +17,8 @@ Music Player is an app that allows for integration with spotify to control your 
    WEB_PORT=4040 #(optional)
    REDIRECT_URI=http://localhost:4040/callback #(optional: switch with ngrok if using)
    AUTH_PORT=4041 #(optional)
-   TOKEN_ENCRYPTION_KEY=
+   TOKEN_ENCRYPTION_KEY= #32bit key
+   NODE_env= #logging
    ```
 2. Install dependencies:
 

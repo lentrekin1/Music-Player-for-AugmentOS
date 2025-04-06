@@ -18,13 +18,16 @@ export enum PlayerCommand {
   TRIGGER_DEVICE_LIST = 'trigger_device_list'
 }
 
+// Different modes for sessions
 export enum SessionMode {
   IDLE,
   LISTENING_FOR_SHAZAM,
   AWAITING_DEVICE_SELECTION
 }
 
-const sessionStates = new Map<string, SessionState>()
+// Map for holding states of the session
+const sessionStates = new Map<string, SessionState>();
+// Maps for voice commands
 const playerCommandMappings = {
   [PlayerCommand.CURRENT]: ['current.', 'what\'s playing', 'now playing', 'current song'],
   [PlayerCommand.NEXT]: ['next.', 'next song', 'skip song'],
@@ -34,47 +37,57 @@ const playerCommandMappings = {
 };
 const triggerPhases = {
   [PlayerCommand.TRIGGER_SHAZAM]: ['shazam', 'find song', 'what song is this', 'identify song'],
-  [PlayerCommand.TRIGGER_DEVICE_LIST]: ['show devices', 'list devices', 'change device', 'select device']
 }
 
 // Set up session event handlers
 export function setupSessionHandlers(session: TpaSession, sessionId: string, settings: any): Array<() => void> {
+  // Array for handler cleanup
   const cleanupHandlers: Array<() => void> = [];
   logger.debug(settings);
 
+  // Initialize base sessionState to idle
   sessionStates.set(sessionId, {mode: SessionMode.IDLE, timeoutId: null});
-  logger.info(`[Session ${sessionId}] Initialized session state to IDLE.`);
+  logger.info(`[Session ${sessionId}] Initialized session state to IDLE.`, {
+    sessionId: sessionId,
+    settings: settings
+  });
 
-  // Listen for user command via transcription
+  // Check if voice commands are enabled from settings
   if (settings.isVoiceCommands?.value) {
+    // Listen for user command via transcription
     const transcriptionHandler = session.events.onTranscription(async (data) => {
-      logger.debug(`[Session ${sessionId}] Received transcription data.`, { isFinal: data.isFinal, textLength: data.text?.length, sessionId: sessionId });
+      logger.debug(`[Session ${sessionId}] Received transcription data.`, {
+        isFinal: data.isFinal, 
+        textLength: data.text?.length, 
+        sessionId: sessionId 
+      });
       if (!data.isFinal) return;
       const lowerText = data.text.toLowerCase().trim()
       if (lowerText === '') return;
       const currentState = getSessionState(sessionId);
       logger.debug(`[Session ${sessionId}] Processing final transcript in mode: ${SessionMode[currentState.mode]}`, { transcript: lowerText, state: currentState, sessionId: sessionId });
 
+      // Switch case for mode of current state
       switch (currentState.mode) {
         case SessionMode.IDLE:
+          // Loops through trigger phases to change states
           for (const [trigger, phases] of Object.entries(triggerPhases)) {
             for (const phrase of phases) {
               if (lowerText.includes(phrase)) {
 
+                // Switch statement for trigger commands
                 switch (trigger as PlayerCommand) {
                   case PlayerCommand.TRIGGER_SHAZAM:
                     await triggerShazam(session, sessionId);
                     break;
 
-                  // case PlayerCommand.TRIGGER_DEVICE_LIST:
-                  //   await triggerDeviceList(session, sessionId);
-                  //   break;
                 }
                 return;
               }
             }
           }
         
+          // Loops through each phrase in 
           for (const [command, phrases] of Object.entries(playerCommandMappings)) {
             for (const phrase of phrases) {
               if (lowerText.includes(phrase)) {
@@ -90,17 +103,6 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, set
           await handleShazamInput(session, sessionId, data.text);
           break;
 
-        // case SessionMode.AWAITING_DEVICE_SELECTION:
-        //   if (currentState.data && Array.isArray(currentState.data)) {
-        //     await handleDeviceSelectionInput(session, sessionId, lowerText, currentState.data as DeviceInfo[]);
-        //   } else {
-        //     console.error(`[Session ${sessionId}] Missing device data in AWAITING_DEVICE_SELECTION mode.`);
-        //     session.layouts.showTextWall('Internal error: Device list missing.', {durationMs: 5000});
-        //     setSessionMode(session, sessionId, SessionMode.IDLE);
-        //   }
-
-        //   break;
-
         default:
           logger.warn(`[Session ${sessionId}] Unhandled session mode: ${currentState.mode}`, {
             sessionId: sessionId,
@@ -114,8 +116,9 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, set
     cleanupHandlers.push(transcriptionHandler);
   }
 
-  // Head position events
+  // Check if heads up display is enabled from settings
   if (settings.isHeadsUpDisplay.value) {
+    // Head position events
     const headPositionHandler = session.events.onHeadPosition(async (data) => {
       if (data.position === 'up') {
         const currentState = getSessionState(sessionId);
@@ -272,6 +275,7 @@ export async function displayCurrentlyPlaying(session: TpaSession, sessionId: st
       return;
     }
 
+    // Sleep to give time for spotify to update currently playing
     await sleep(500)
     const playbackInfo = await spotifyService.getCurrentlyPlaying(sessionId);
     logger.debug(`[Session ${sessionId}] Fetched playback info from Spotify.`, {
@@ -279,6 +283,7 @@ export async function displayCurrentlyPlaying(session: TpaSession, sessionId: st
       sessionId: sessionId
     });
     
+    // Ceck for the required info
     if (playbackInfo && playbackInfo.trackName) {
       const displayText = 
         `${playbackInfo.isPlaying ? 'Now Playing' : 'Paused'}\n\n` +
@@ -307,13 +312,16 @@ export async function displayCurrentlyPlaying(session: TpaSession, sessionId: st
 }
 
 function getSessionState(sessionId: string): SessionState {
+  // Check for sessionState
   if (!sessionStates.has(sessionId)) {
     logger.warn(`[Session ${sessionId}] State not found, initializing to IDLE.`, {
       sessionId: sessionId
     });
+    // Initialize default if no
     sessionStates.set(sessionId, {mode: SessionMode.IDLE, timeoutId: null});
   }
 
+  // Return sessionState for sessionId
   return sessionStates.get(sessionId)!;
 }
 
@@ -321,6 +329,7 @@ function setSessionMode(session: TpaSession, sessionId: string, newMode: Session
   const currentState = getSessionState(sessionId);
 
   if (currentState.timeoutId) {
+    // Clear timeout to set new one
     clearTimeout(currentState.timeoutId);
   }
 
@@ -333,12 +342,14 @@ function setSessionMode(session: TpaSession, sessionId: string, newMode: Session
       })
       const timedOutState = sessionStates.get(sessionId);
       if (timedOutState && timedOutState.mode === newMode) {
+        // Reset session to IDLE on timeout spread(...) old state for futureproofing
         sessionStates.set(sessionId, {...timedOutState, mode: SessionMode.IDLE, timeoutId: null, data: undefined});
         session.layouts.showTextWall(options.timeoutMessage || 'Action timed out.', {durationMs: 5000});
       }
     }, options.timeoutMs);
   }
 
+  // Set new state with provided parameters
   const newState: SessionState = {
     mode: newMode,
     timeoutId: newTimeoutId,
@@ -354,8 +365,16 @@ function setSessionMode(session: TpaSession, sessionId: string, newMode: Session
   });
 }
 
+async function triggerShazam(session: TpaSession, sessionId: string): Promise<void> {
+  logger.info(`[Session ${sessionId}] Triggering shazam listening mode.`, {
+    sessionId: sessionId
+  });
+  await enterShazamMode(session, sessionId);
+}
+
 async function enterShazamMode(session: TpaSession, sessionId: string): Promise<void> {
   session.layouts.showTextWall('Listening for song...', {durationMs: 10000 - 500});
+  // Update session mode to LISTENING_FOR_SHAZAM
   setSessionMode(session, sessionId, SessionMode.LISTENING_FOR_SHAZAM, {
     timeoutMs: 10000,
     timeoutMessage: 'Shazam cancelled. No speech detected.'
@@ -363,11 +382,16 @@ async function enterShazamMode(session: TpaSession, sessionId: string): Promise<
 }
 
 async function handleShazamInput(session: TpaSession, sessionId: string, transcript: string): Promise<void> {
-  console.log(`[Session ${sessionId}] Processing Shazam input: "${transcript}"`);
+  logger.info(`[Session ${sessionId}] Processing Shazam input: "${transcript}"`, {
+    sessionId: sessionId,
+    transcript: transcript
+  });
   setSessionMode(session, sessionId, SessionMode.IDLE);
 
   if (!transcript || transcript.trim().length === 0) {
-    console.log(`[Session ${sessionId}] Empty transcript received for Shazam.`)
+    logger.info(`[Session ${sessionId}] Empty transcript received for Shazam.`, {
+      sessionId: sessionId
+    });
     session.layouts.showTextWall('Could not identify song (no speech).', {durationMs: 5000});
     return;
   }
@@ -398,31 +422,4 @@ async function handleShazamInput(session: TpaSession, sessionId: string, transcr
     });
     session.layouts.showTextWall('Error identifying song via Shazam.', {durationMs: 5000});
   }
-}
-
-async function triggerShazam(session: TpaSession, sessionId: string): Promise<void> {
-  logger.info(`[Session ${sessionId}] Triggering shazam listening mode.`, {
-    sessionId: sessionId
-  });
-  await enterShazamMode(session, sessionId);
-}
-
-async function enterDeviceSelectionMode(session: TpaSession, sessionId: string, devices: DeviceInfo[]): Promise<void> {
-  const devicesToShow = devices.slice(0, 3);
-  let deviceList = 'Say the number to select device:\n\n';
-
-  devicesToShow.forEach((device, index) => {
-    deviceList += `${index + 1}: ${device.name} (${device.type})\n`;
-  });
-
-  if (devices.length > 3) {
-    deviceList += `... (${devices.length - devicesToShow.length} more)`;
-  }
-
-  session.layouts.showTextWall(deviceList.trim(), {durationMs: 10000 - 500});
-  setSessionMode(session, sessionId, SessionMode.AWAITING_DEVICE_SELECTION, {
-    data: devicesToShow,
-    timeoutMs: 10000,
-    timeoutMessage: 'Device selection cancelled (timeout).'
-  });
 }
