@@ -1,8 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto'
+import crypto, { setEngine } from 'crypto'
 import {SpotifyCredentials} from '../types';
 import {config} from '../config/environment'
+import logger from '../utils/logger'
 
 export class TokenService {
   private userTokens: Map<string, SpotifyCredentials> = new Map();
@@ -97,7 +98,15 @@ export class TokenService {
           refreshToken: this.encrypt(credentials.refreshToken), // Encrypt before saving
         };
       } catch (error) {
-        console.error(`Error encrypting token for session ${sessionId} during save:`, error);
+        logger.error(`Error encrypting token for session ${sessionId} during save.`, {
+          sessionId: sessionId,
+          error: {
+            message: error.message,
+            stack: error.stack,
+            responseStatus: error.response?.status,
+            responseBody: error.response?.data 
+          }
+        });
         break;
       }
     }
@@ -106,14 +115,25 @@ export class TokenService {
       fs.writeFileSync(this.tokenFilePath, JSON.stringify(tokensToSave, null, 2));
       console.log('Tokens saved to file (encrypted)');
     } catch (error) {
-      console.error('Error writing tokens file:', error);
+      logger.error('Error writing tokens file.', {
+        filePath: this.tokenFilePath,
+        tokens: tokensToSave,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          responseStatus: error.response?.status,
+          responseBody: error.response?.data 
+        }
+      });
     }
   }
   
   private loadTokens(): void {
     try {
       if (!fs.existsSync(this.tokenFilePath)) {
-        console.log('No saved tokens file found.');
+        logger.warn('No saved tokens file found.', {
+          filePath: this.tokenFilePath
+        });
         this.userTokens = new Map(); // Ensure map is empty if file doesn't exist
         return;
       }
@@ -121,7 +141,9 @@ export class TokenService {
       const fileContent = fs.readFileSync(this.tokenFilePath, 'utf8');
         // Handle empty file case to prevent JSON parsing errors
       if (!fileContent.trim()) {
-        console.log('Token file is empty.');
+        logger.warn('Token file is empty.', {
+          fileLength: fileContent.length
+        });
         this.userTokens = new Map();
         return;
       }
@@ -134,7 +156,10 @@ export class TokenService {
       for (const [sessionId, storedCreds] of Object.entries(encryptedTokensObj)) {
         // Basic validation - ensure it looks like a credential object with strings to decrypt
         if (typeof storedCreds !== 'object' || storedCreds === null || typeof storedCreds.accessToken !== 'string' || typeof storedCreds.refreshToken !== 'string') {
-          console.warn(`Skipping token for session ${sessionId} due to invalid format in storage.`);
+          logger.warn(`Skipping token for session ${sessionId} due to invalid format in storage.`, {
+            sessionId: sessionId,
+            storedCreds: storedCreds
+          });
           continue;
         }
 
@@ -154,16 +179,32 @@ export class TokenService {
           loadedTokens.set(sessionId, decryptedCredentials);
         } catch (error) {
             // Log specific decryption errors
-            console.error(`Failed to decrypt token for session ${sessionId}. Skipping. Error:`, error instanceof Error ? error.message : error);
+            logger.error(`Failed to decrypt token for session ${sessionId}. Skipping.`, {
+              sessionId: sessionId,
+              storedCreds: storedCreds,
+              error: {
+                message: error.message,
+                stack: error.stack,
+                responseStatus: error.response?.status,
+                responseBody: error.response?.data 
+              }
+            });
         }
       }
 
       // Replace the in-memory map with the newly loaded and decrypted tokens
       this.userTokens = loadedTokens;
-      console.log(`Loaded and decrypted ${this.userTokens.size} tokens from storage.`);
+      logger.info(`Loaded and decrypted ${this.userTokens.size} tokens from storage.`);
     } catch (error) {
       // Catch errors related to file reading or JSON parsing
-      console.error('Error reading or parsing tokens file:', error);
+      logger.error('Error reading or parsing tokens file.', {
+        error: {
+          message: error.message,
+          stack: error.stack,
+          responseStatus: error.response?.status,
+          responseBody: error.response?.data 
+        }
+      });
       // Fallback to an empty map in case of critical loading errors
       this.userTokens = new Map();
     }

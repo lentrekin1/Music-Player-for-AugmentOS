@@ -1,4 +1,5 @@
 import winston from 'winston';
+import {config} from '../config/environment';
 
 // Define severity levels
 const levels = {
@@ -10,7 +11,7 @@ const levels = {
 };
 
 // Choose level based on environment (more verbose in dev)
-const level = process.env.NODE_ENV === 'production' ? 'warn' : 'debug';
+const level = config.logging.appState === 'production' ? 'warn' : 'debug';
 
 // Consistent format for logs
 const logFormat = winston.format.combine(
@@ -24,7 +25,7 @@ const logFormat = winston.format.combine(
 const transports = [
   // Always log to the console (adjust level for production)
   new winston.transports.Console({
-      level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+      level: config.logging.appState === 'production' ? 'info' : 'debug',
       format: winston.format.combine(
           winston.format.colorize(), // Add colors for readability in console
           winston.format.simple() // Use simpler format for console

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { spotifyService } from '../services/spotify-service';
 import { activeSessions } from '../server';
 import { displayCurrentlyPlaying } from '../handlers/session-handler';
+import logger from '../utils/logger'
 
 const router = Router();
 
@@ -29,7 +30,17 @@ router.get('/callback', async (req: Request, res: Response) => {
       await displayCurrentlyPlaying(session, sessionId);
     }
   } catch (error) {
-    console.error('Authentication error:', error);
+    logger.error('Authentication error:', {
+      sessionId: sessionId,
+      res: res,
+      req: req,
+      error: {
+        message: error.message,
+        stack: error.stack,
+        responseStatus: error.response?.status,
+        responseBody: error.response?.data 
+      }
+    });
     res.send('Authentication failed. Please try again.');
   }
 });

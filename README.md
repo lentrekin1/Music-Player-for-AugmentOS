@@ -10,7 +10,7 @@ Music Player is an app that allows for integration with spotify to control your 
 
    ```
    AUGMENTOS_API_KEY=your_augment_api_key
-   AUGMENTOS_WS_URL=wss://staging.augmentos.org/tpa-ws #(optional)
+   AUGMENTOS_PACKAGE_NAME=your_package_name
    SPOTIFY_CLIENT_ID=your_spotify_client_id
    SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
    WEB_URL=http://localhost #(optional: switch with ngrok if using)
@@ -18,7 +18,7 @@ Music Player is an app that allows for integration with spotify to control your 
    REDIRECT_URI=http://localhost:4040/callback #(optional: switch with ngrok if using)
    AUTH_PORT=4041 #(optional)
    TOKEN_ENCRYPTION_KEY= #32bit key
-   NODE_env= #logging
+   NODE_env=state_of_app #logging
    ```
 2. Install dependencies:
 
@@ -34,10 +34,11 @@ Music Player is an app that allows for integration with spotify to control your 
 ### Voice Commands
 
 - "What\'s playing", "Now playing", "Current song" - Display Now Playing music with artist and album
-- "Next song", "skip song" - Plays the next song in queue
+- "Next song", "Skip song" - Plays the next song in queue
 - "Previous song", "Rewind" - Plays the previous in queue
 - "Play" - Starts or resumes music
 - "Pause" - Stop or pauses music
+- "Shazam", "Find song" - Listens to surroundings for lyrics to search
 
 ## Development
 
@@ -49,4 +50,4 @@ Music Player is an app that allows for integration with spotify to control your 
 
 ### Planned
 
-1. Apple Music integration
+1. Direct player controls (along with spotify api)

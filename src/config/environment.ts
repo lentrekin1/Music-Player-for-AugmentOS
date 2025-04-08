@@ -20,6 +20,9 @@ export const config = {
   },
   encryption: {
     key: process.env.TOKEN_ENCRYPTION_KEY
+  },
+  logging: {
+    appState: process.env.NODE_ENV
   }
 };
 

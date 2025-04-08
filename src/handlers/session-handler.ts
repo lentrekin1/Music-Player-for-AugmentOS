@@ -5,7 +5,6 @@ import {DeviceInfo, SessionState} from '../types'
 import {tokenService} from '../services/token-service';
 import {spotifyService} from '../services/spotify-service';
 import {shazamService} from '../services/shazam-service';
-import { stat } from 'fs';
 
 // Player command actions
 export enum PlayerCommand {

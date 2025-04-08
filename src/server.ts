@@ -4,6 +4,8 @@ import axios from 'axios';
 import {config} from './config/environment';
 import {tokenService} from './services/token-service';
 import {setupSessionHandlers, displayCurrentlyPlaying} from './handlers/session-handler';
+import logger from './utils/logger';
+import { resolveNaptr } from 'dns';
 
 // Keep track of active sessions
 export const activeSessions = new Map<string, TpaSession>();
@@ -12,8 +14,14 @@ export class MusicPlayerServer extends TpaServer {
   // Use a different name to avoid collision with parent class
   private sessionHandlers: Array<() => void> = [];
   private appSettings = {
-    isHeadsUpDisplay: undefined,
-    isVoiceCommands: undefined
+    isHeadsUpDisplay: {
+      key: "heads_up_display",
+      value: false,
+    },
+    isVoiceCommands: {
+      key: "voice_commands",
+      value: true,
+    }
   };
 
   constructor() {
@@ -30,7 +38,7 @@ export class MusicPlayerServer extends TpaServer {
       try {
         const {userIdForSettings, settings} = req.body;
 
-        console.log(req.body);
+        logger.debug(req.body);
         
         if (!userIdForSettings || !Array.isArray(settings)) {
           return res.send({error: 'Missing userId or settings array in payload'});
@@ -39,7 +47,16 @@ export class MusicPlayerServer extends TpaServer {
         const result = await this.updateSettings(userIdForSettings, settings);
         res.json(result);
       } catch (error) {
-        console.error('Error in settings endpoint:', error);
+        logger.error('Error in settings endpoint.', {
+          req: req,
+          res: res,
+          error: {
+            message: error.message,
+            stack: error.stack,
+            responseStatus: error.response?.status,
+            responseBody: error.response?.data 
+          }
+        });
         res.send({error: 'Internal server error updating settings'})
       }
     });
@@ -51,14 +68,19 @@ export class MusicPlayerServer extends TpaServer {
     // Start auth server on separate port if provided
     if (config.server.authPort) {
       app.listen(config.server.authPort, () => {
-        console.log(`Authentication server running on port ${config.server.authPort}`);
+        logger.info(`Authentication server running on port ${config.server.authPort}`, {
+          authPort: config.server.authPort
+        });
       });
     }
   }
 
   // Called when new user connects to app
   protected async onSession(session: TpaSession, sessionId: string, userId: string): Promise<void> {
-    console.log(`New session started: ${sessionId} for user: ${userId}`);
+    logger.info(`New session started: ${sessionId} for user: ${userId}`, {
+      sessionId: sessionId,
+      userId: userId
+    });
     
     // Store session to access it later
     activeSessions.set(sessionId, session);
@@ -72,7 +94,7 @@ export class MusicPlayerServer extends TpaServer {
     } else {
       // User needs to authenticate
       const loginUrl = `${config.server.webUrl}/login/${sessionId}`;
-      console.log(loginUrl);
+      logger.debug(loginUrl);
       session.layouts.showTextWall(
         `Please visit the following URL on your phone or computer to connect your Spotify account: ${loginUrl}`,
         {durationMs: 5000}
@@ -87,7 +109,11 @@ export class MusicPlayerServer extends TpaServer {
   }
 
   protected async onStop(sessionId: string, userId: string, reason: string): Promise<void> {
-    console.log(`Session stopped: ${sessionId} for user: ${userId}. Reason: ${reason}`);
+    logger.info(`Session stopped: ${sessionId} for user: ${userId}. Reason: ${reason}`, {
+      sessionId: sessionId, 
+      userId: userId,
+      reason: reason
+    });
     
     // The parent class will automatically handle the cleanup handlers
     // We just need to remove our session from the active sessions map
