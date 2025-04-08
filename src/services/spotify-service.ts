@@ -15,29 +15,29 @@ export class SpotifyService {
     });
   }
 
-  public createAuthorizationUrl(sessionId: string): string {
+  public createAuthorizationUrl(userId: string): string {
     // Generate auth URL with necessary scopes (Spotify web-api scopes)
     return this.spotifyApi.createAuthorizeURL([
       'user-read-currently-playing',
       'user-read-playback-state',
       'user-modify-playback-state'
-    ], sessionId);
+    ], userId);
   }
 
-  public async handleAuthorizationCallback(code: string, sessionId: string): Promise<void> {
+  public async handleAuthorizationCallback(code: string, userId: string): Promise<void> {
     // Exchange authorization code for access token
     const data = await this.spotifyApi.authorizationCodeGrant(code);
 
     // Store user tokens for this session
-    tokenService.setToken(sessionId, {
+    tokenService.setToken(userId, {
       accessToken: data.body.access_token,
       refreshToken: data.body.refresh_token,
       expiresAt: Date.now() + data.body.expires_in * 1000
     });
   }
 
-  public async refreshTokenIfNeeded(sessionId: string): Promise<boolean> {
-    const credentials = tokenService.getToken(sessionId);
+  public async refreshTokenIfNeeded(userId: string): Promise<boolean> {
+    const credentials = tokenService.getToken(userId);
     if (!credentials) return false;
 
     // Check if token needs refreshing
@@ -48,7 +48,7 @@ export class SpotifyService {
         const data = await this.spotifyApi.refreshAccessToken();
 
         // Update stored credentials
-        tokenService.setToken(sessionId, {
+        tokenService.setToken(userId, {
           accessToken: data.body.access_token,
           refreshToken: credentials.refreshToken,
           expiresAt: Date.now() + data.body.expires_in * 1000
@@ -59,7 +59,7 @@ export class SpotifyService {
         return true;
       } catch (error) {
         logger.error('Token refresh error', {
-          sessionId: sessionId,
+          userId: userId,
           credentials: credentials,
           error: {
             message: error.message,
@@ -77,12 +77,12 @@ export class SpotifyService {
     }
   }
 
-  public async getCurrentlyPlaying(sessionId: string): Promise<{isPlaying: boolean; trackName?: string; artists?: string; albumName?: string;}> {
-    const credentials = tokenService.getToken(sessionId)
+  public async getCurrentlyPlaying(userId: string): Promise<{isPlaying: boolean; trackName?: string; artists?: string; albumName?: string;}> {
+    const credentials = tokenService.getToken(userId)
 
     if (!credentials) {
-      logger.warn(`No token found for session ${sessionId}`, {
-        sessionId: sessionId
+      logger.warn(`No token found for user ${userId}`, {
+        userId: userId
       });
       return {isPlaying: false};
     }
@@ -107,12 +107,12 @@ export class SpotifyService {
     return {isPlaying: false};
   }
 
-  public async playTrack(sessionId: string): Promise<void> {
-    const credentials = tokenService.getToken(sessionId)
+  public async playTrack(userId: string): Promise<void> {
+    const credentials = tokenService.getToken(userId)
 
     if (!credentials) {
-      logger.warn(`No token found for session ${sessionId}`, {
-        sessionId: sessionId
+      logger.warn(`No token found for user ${userId}`, {
+        userId: userId
       });
     }
 
@@ -120,12 +120,12 @@ export class SpotifyService {
     await this.spotifyApi.play();
   }
 
-  public async pauseTrack(sessionId: string): Promise<void> {
-    const credentials = tokenService.getToken(sessionId)
+  public async pauseTrack(userId: string): Promise<void> {
+    const credentials = tokenService.getToken(userId)
 
     if (!credentials) {
-      logger.warn(`No token found for session ${sessionId}`, {
-        sessionId: sessionId
+      logger.warn(`No token found for user ${userId}`, {
+        userId: userId
       });
     }
 
@@ -133,12 +133,12 @@ export class SpotifyService {
     await this.spotifyApi.pause();
   }
 
-  public async nextTrack(sessionId: string): Promise<void> {
-    const credentials = tokenService.getToken(sessionId)
+  public async nextTrack(userId: string): Promise<void> {
+    const credentials = tokenService.getToken(userId)
 
     if (!credentials) {
-      logger.warn(`No token found for session ${sessionId}`, {
-        sessionId: sessionId
+      logger.warn(`No token found for user ${userId}`, {
+        userId: userId
       });
     }
 
@@ -146,12 +146,12 @@ export class SpotifyService {
     await this.spotifyApi.skipToNext();
   }
 
-  public async previousTrack(sessionId: string): Promise<void> {
-    const credentials = tokenService.getToken(sessionId)
+  public async previousTrack(userId: string): Promise<void> {
+    const credentials = tokenService.getToken(userId)
 
     if (!credentials) {
-      logger.warn(`No token found for session ${sessionId}`, {
-        sessionId: sessionId
+      logger.warn(`No token found for user ${userId}`, {
+        userId: userId
       });
     }
 
@@ -159,12 +159,12 @@ export class SpotifyService {
     await this.spotifyApi.skipToPrevious();
   }
 
-  public async getDevice(sessionId: string): Promise<SpotifyApi.UserDevice[]> {
-    const credentials = tokenService.getToken(sessionId);
+  public async getDevice(userId: string): Promise<SpotifyApi.UserDevice[]> {
+    const credentials = tokenService.getToken(userId);
 
     if (!credentials) {
-      logger.warn(`No token found for session ${sessionId}`, {
-        sessionId: sessionId
+      logger.warn(`No token found for user ${userId}`, {
+        userId: userId
       });
     }
 
@@ -174,12 +174,12 @@ export class SpotifyService {
     return devices;
   }
 
-  public async setDevice(sessionId: string, deviceId: string[]): Promise<void> {
-    const credentials = tokenService.getToken(sessionId);
+  public async setDevice(userId: string, deviceId: string[]): Promise<void> {
+    const credentials = tokenService.getToken(userId);
 
     if (!credentials) {
-      logger.warn(`No token found for session ${sessionId}`, {
-        sessionId: sessionId
+      logger.warn(`No token found for user ${userId}`, {
+        userId: userId
       });
     }
 

@@ -1,37 +1,38 @@
-import { Router, Request, Response } from 'express';
-import { spotifyService } from '../services/spotify-service';
-import { activeSessions } from '../server';
-import { displayCurrentlyPlaying } from '../handlers/session-handler';
+import {Router, Request, Response} from 'express';
+import {spotifyService} from '../services/spotify-service';
+import {activeSessions} from '../server';
+import {displayCurrentlyPlaying} from '../handlers/session-handler';
 import logger from '../utils/logger'
 
 const router = Router();
 
 // Handle spotify auth
-router.get('/login/:sessionId', (req: Request, res: Response) => {
-  const sessionId = req.params.sessionId;
-  const authUrl = spotifyService.createAuthorizationUrl(sessionId);
+router.get('/login/:userId', (req: Request, res: Response) => {
+  const userId = req.params.userId;
+  const authUrl = spotifyService.createAuthorizationUrl(userId);
   res.redirect(authUrl);
 });
 
 // Handle callback from Spotify
 router.get('/callback', async (req: Request, res: Response) => {
   const { code, state } = req.query;
-  const sessionId = state as string;
+  const userId = state as string;
 
   try {
     // Exchange authorization code for access token
-    await spotifyService.handleAuthorizationCallback(code as string, sessionId);
+    await spotifyService.handleAuthorizationCallback(code as string, userId);
 
     res.send('Authentication successful! You can close this window and return to your glasses.');
 
     // If there's a session active, display now playing information
-    const session = activeSessions.get(sessionId);
+    const session = activeSessions.get(userId)?.session;
+
     if (session) {
-      await displayCurrentlyPlaying(session, sessionId);
+      await displayCurrentlyPlaying(session, userId);
     }
   } catch (error) {
     logger.error('Authentication error:', {
-      sessionId: sessionId,
+      userId: userId,
       res: res,
       req: req,
       error: {

@@ -5,13 +5,12 @@ import {config} from './config/environment';
 import {tokenService} from './services/token-service';
 import {setupSessionHandlers, displayCurrentlyPlaying} from './handlers/session-handler';
 import logger from './utils/logger';
+import { setEngine } from 'crypto';
 
 // Keep track of active sessions
-export const activeSessions = new Map<string, TpaSession>();
+export const activeSessions = new Map<string, {session: TpaSession, sessionId: string}>();
 
 export class MusicPlayerServer extends TpaServer {
-  // Use a different name to avoid collision with parent class
-  private sessionHandlers: Array<() => void> = [];
   private appSettings = {
     isHeadsUpDisplay: {
       key: "heads_up_display",
@@ -33,7 +32,7 @@ export class MusicPlayerServer extends TpaServer {
     // Get the Express app for adding custom routes
     const app = this.getExpressApp();
 
-    app.post('/settings', async (req: Request, res: Response) => {
+    app.post('/settings', async (req: any, res: any) => {
       try {
         const {userIdForSettings, settings} = req.body;
 
@@ -43,7 +42,7 @@ export class MusicPlayerServer extends TpaServer {
           return res.send({error: 'Missing userId or settings array in payload'});
         }
     
-        const result = await this.updateSettings(userIdForSettings, settings);
+        const result = await this.setSettings(userIdForSettings, undefined, undefined, settings);
         res.json(result);
       } catch (error) {
         logger.error('Error in settings endpoint.', {
@@ -82,17 +81,17 @@ export class MusicPlayerServer extends TpaServer {
     });
     
     // Store session to access it later
-    activeSessions.set(sessionId, session);
+    this.setActiveSession(userId, session, sessionId)
 
-    await this.fetchAndApplySettings(session, userId);
+    await this.setSettings(userId, session, sessionId)
 
     // Check if user is already authenticated with Spotify
-    if (tokenService.hasToken(sessionId)) {
+    if (tokenService.hasToken(userId)) {
       // User is authenticated, start showing now playing info
-      await displayCurrentlyPlaying(session, sessionId);
+      await displayCurrentlyPlaying(session, userId);
     } else {
       // User needs to authenticate
-      const loginUrl = `${config.server.webUrl}/login/${sessionId}`;
+      const loginUrl = `${config.server.webUrl}/login/${userId}`;
       logger.debug(loginUrl);
       session.layouts.showTextWall(
         `Please visit the following URL on your phone or computer to connect your Spotify account: ${loginUrl}`,
@@ -101,7 +100,7 @@ export class MusicPlayerServer extends TpaServer {
     }
 
     // Set up event handlers for this session and get the cleanup handlers
-    const handlers = setupSessionHandlers(session, sessionId, this.appSettings);
+    const handlers = setupSessionHandlers(session, userId, this.appSettings);
     
     // Use the parent class's addCleanupHandler method instead of managing our own array
     handlers.forEach(handler => this.addCleanupHandler(handler));
@@ -116,43 +115,77 @@ export class MusicPlayerServer extends TpaServer {
     
     // The parent class will automatically handle the cleanup handlers
     // We just need to remove our session from the active sessions map
-    activeSessions.delete(sessionId);
+    this.removeActiveSession(userId);
     
     // Call the parent class's onStop method to ensure proper cleanup
     await super.onStop(sessionId, userId, reason);
   }
 
-  private async fetchAndApplySettings(session: TpaSession, userId: string): Promise<void> {
-    try {
-      const response = await axios.get(`http://cloud.augmentos.org/tpasettings/user/${config.augmentOS.packageName}`, {
-        headers: {Authorization: `Bearer ${userId}`}
-      });
+  public getActiveSession(userId: string): {session: TpaSession, sessionId: string} | null {
+    return activeSessions.get(userId) || null;
+  }
 
-      const settings = response.data.settings;
-      console.log(`Fetched settings for user ${userId}:`, settings);
+  public setActiveSession(userId: string, session: TpaSession, sessionId: string): void {
+    activeSessions.set(userId, {session: session, sessionId: sessionId});
+  }
+
+  public removeActiveSession(userId: string): void {
+    activeSessions.delete(userId);
+  }
+
+  private async setSettings(userId: string, session?: TpaSession, sessionId?:string, providedSettings?: any[]): Promise<any> {
+    try {
+      if (!session || !sessionId) {
+        logger.info(`No session provided for user ${userId}, looking for active session`);
+        const activeSession = this.getActiveSession(userId);
+        
+        if (activeSession) {
+          logger.debug(`Found active session ${activeSession.sessionId} for user ${userId}, using it`);
+          return this.setSettings(userId, activeSession.session, activeSession.sessionId, providedSettings);
+        } else {
+          logger.debug(`No active session found for user ${userId}, cannot process settings`);
+          return {
+            status: 'Failed to process settings',
+            error: 'No active session available',
+            userId
+          };
+        }
+      }
+
+      let settings: any[] = providedSettings || [];
+
+      if (!providedSettings) {
+        logger.info(`Fetching settings for user ${userId}`);
+        const response = await axios.get(`http://cloud.augmentos.org/tpasettings/user/${config.augmentOS.packageName}`, {
+          headers: { Authorization: `Bearer ${userId}` }
+        });
+        settings = response.data.settings;
+        logger.info(`Fetched settings for user ${userId}: ${settings}`);
+      } else {
+        logger.info(`Using provided settings for user: ${userId}`);
+      }
 
       this.appSettings.isHeadsUpDisplay = settings.find((s: any) => s.key === 'heads_up_display');
       this.appSettings.isVoiceCommands = settings.find((s: any) => s.key === 'voice_commands');
-      console.log(`Applied settings for user ${userId}: headsUpDisplay=${this.appSettings.isHeadsUpDisplay.value}, voiceCommands=${this.appSettings.isVoiceCommands.value}`);
-    } catch (error){
-      console.error(`Error fetching settings for user ${userId}:`, error);
-    }
-  }
-
-  public async updateSettings(userId: string, settings: any[]): Promise<any> {
-    try {
-      console.log('Received settings update for user: ', userId);
-
-      this.appSettings.isHeadsUpDisplay = settings.find(s => s.key === 'heads_up_display');
-      this.appSettings.isVoiceCommands = settings.find(s => s.key === 'voice_commands');
-
+      logger.info(`Applied settings for user ${userId}: headsUpDisplay=${this.appSettings.isHeadsUpDisplay.value}, voiceCommands=${this.appSettings.isVoiceCommands.value}`);
       return {
         status: 'Settings updated successfully',
         headsUpDisplay: this.appSettings.isHeadsUpDisplay,
         voiceCommands: this.appSettings.isVoiceCommands
       };
     } catch (error){
-      console.error('Error updating settings', error);
+      logger.error(`Error fetching settings for user ${userId}.`, {
+        userId: userId,
+        providedSettings: providedSettings || [],
+        error: {
+          message: error.message,
+          stack: error.stack,
+          responseStatus: error.response?.status,
+          responseBody: error.response?.data 
+        }
+      });
     }
   }
 }
+
+

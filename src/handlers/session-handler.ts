@@ -40,15 +40,15 @@ const triggerPhases = {
 }
 
 // Set up session event handlers
-export function setupSessionHandlers(session: TpaSession, sessionId: string, settings: any): Array<() => void> {
+export function setupSessionHandlers(session: TpaSession, userId: string, settings: any): Array<() => void> {
   // Array for handler cleanup
   const cleanupHandlers: Array<() => void> = [];
   logger.debug(settings);
 
   // Initialize base sessionState to idle
-  sessionStates.set(sessionId, {mode: SessionMode.IDLE, timeoutId: null, pendingCommand: undefined});
-  logger.info(`[Session ${sessionId}] Initialized session state to IDLE.`, {
-    sessionId: sessionId,
+  sessionStates.set(userId, {mode: SessionMode.IDLE, timeoutId: null, pendingCommand: undefined});
+  logger.info(`[User ${userId}] Initialized session state to IDLE.`, {
+    userId: userId,
     settings: settings
   });
 
@@ -56,16 +56,16 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, set
   if (settings.isVoiceCommands?.value) {
     // Listen for user command via transcription
     const transcriptionHandler = session.events.onTranscription(async (data) => {
-      logger.debug(`[Session ${sessionId}] Received transcription data.`, {
+      logger.debug(`[User ${userId}] Received transcription data.`, {
         isFinal: data.isFinal, 
         textLength: data.text?.length, 
-        sessionId: sessionId 
+        userId: userId 
       });
       if (!data.isFinal) return;
       const lowerText = data.text.toLowerCase().trim()
       if (lowerText === '') return;
-      const currentState = getSessionState(sessionId);
-      logger.debug(`[Session ${sessionId}] Processing final transcript in mode: ${SessionMode[currentState.mode]}`, { transcript: lowerText, state: currentState, sessionId: sessionId });
+      const currentState = getSessionState(userId);
+      logger.debug(`[User ${userId}] Processing final transcript in mode: ${SessionMode[currentState.mode]}`, { transcript: lowerText, state: currentState, userId: userId });
 
       // Switch case for mode of current state
       switch (currentState.mode) {
@@ -78,11 +78,11 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, set
                 // Switch statement for trigger commands
                 switch (trigger as PlayerCommand) {
                   case PlayerCommand.TRIGGER_SHAZAM:
-                    await triggerShazam(session, sessionId);
+                    await triggerShazam(session, userId);
                     break;
 
                   case PlayerCommand.TRIGGER_DEVICE_LIST:
-                    await triggerDeviceList(session, sessionId);
+                    await triggerDeviceList(session, userId);
                     break;
                 }
                 return;
@@ -94,7 +94,7 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, set
           for (const [command, phrases] of Object.entries(playerCommandMappings)) {
             for (const phrase of phrases) {
               if (lowerText.includes(phrase)) {
-                await handlePlayerCommand(session, sessionId, command as PlayerCommand);
+                await handlePlayerCommand(session, userId, command as PlayerCommand);
                 return;
               }
             }
@@ -103,33 +103,32 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, set
           break;
 
         case SessionMode.LISTENING_FOR_SHAZAM:
-          await handleShazamInput(session, sessionId, data.text);
+          await handleShazamInput(session, userId, data.text);
           break;
 
         case SessionMode.AWAITING_DEVICE_SELECTION:
           if (currentState.data && Array.isArray(currentState.data)) {
-            await handleDeviceSelectionInput(session, sessionId, lowerText, currentState.data as DeviceInfo[]);
+            await handleDeviceSelectionInput(session, userId, lowerText, currentState.data as DeviceInfo[]);
           } else {
-            logger.warn(`[Session ${sessionId}] Missing device data in AWAITING_DEVICE_SELECTION mode.`, {
-              sessionId: sessionId,
+            logger.warn(`[User ${userId}] Missing device data in AWAITING_DEVICE_SELECTION mode.`, {
+              userId: userId,
               settings: settings,
               mode: currentState.mode,
               timeoutId: currentState.timeoutId,
               currentStateData: currentState.data
             });
             session.layouts.showTextWall('Internal error: Device list missing.', {durationMs: 5000});
-            setSessionMode(session, sessionId, SessionMode.IDLE);
+            setSessionMode(session, userId, SessionMode.IDLE);
           }
 
           break;
 
         default:
-          logger.warn(`[Session ${sessionId}] Unhandled session mode: ${currentState.mode}`, {
-            sessionId: sessionId,
-            userId: sessionId,
+          logger.warn(`[User ${userId}] Unhandled session mode: ${currentState.mode}`, {
+            userId: userId,
             modeValue: currentState.mode
           });
-          setSessionMode(session, sessionId, SessionMode.IDLE);
+          setSessionMode(session, userId, SessionMode.IDLE);
       }
     });
 
@@ -141,10 +140,10 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, set
     // Head position events
     const headPositionHandler = session.events.onHeadPosition(async (data) => {
       if (data.position === 'up') {
-        const currentState = getSessionState(sessionId);
+        const currentState = getSessionState(userId);
 
         if (currentState.mode === SessionMode.IDLE) {
-          await handlePlayerCommand(session, sessionId, PlayerCommand.CURRENT);
+          await handlePlayerCommand(session, userId, PlayerCommand.CURRENT);
         }
       }
     });
@@ -155,7 +154,7 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, set
   // Error handler
   const errorHandler = session.events.onError((error) => {
     logger.error(`Error`, {
-      sessionId: sessionId,
+      userId: userId,
       settings: settings,
       error: {
         message: error.message,
@@ -171,13 +170,13 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, set
   cleanupHandlers.push(errorHandler);
 
   const stateCleanup = () => {
-    const state = sessionStates.get(sessionId);
+    const state = sessionStates.get(userId);
     if (state?.timeoutId) {
       clearTimeout(state.timeoutId);
     }
-    sessionStates.delete(sessionId);
-    logger.info(`[Session ${sessionId}] Cleaned up session state.`, {
-      sessionId: sessionId 
+    sessionStates.delete(userId);
+    logger.info(`[User ${userId}] Cleaned up session state.`, {
+      userId: userId 
     });
   };
 
@@ -188,20 +187,20 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, set
 }
 
 // Handle player commands
-async function handlePlayerCommand(session: TpaSession, sessionId: string, command: PlayerCommand): Promise<void> {
-  logger.info(`[Session ${sessionId}] Handling command ${command}`, {
-    sessionId: sessionId,
+async function handlePlayerCommand(session: TpaSession, userId: string, command: PlayerCommand): Promise<void> {
+  logger.info(`[User ${userId}] Handling command ${command}`, {
+    userId: userId,
     command: command
   });
 
   // Check if user is authenticated
-  if (!tokenService.hasToken(sessionId)) {
+  if (!tokenService.hasToken(userId)) {
     session.layouts.showTextWall('Please connect your Spotify account first.', {durationMs: 5000});
     return;
   }
 
   // Refresh token if needed
-  const tokenValid = await spotifyService.refreshTokenIfNeeded(sessionId);
+  const tokenValid = await spotifyService.refreshTokenIfNeeded(userId);
   if (!tokenValid) {
     session.layouts.showTextWall('Error refreshing Spotify connection. Please reconnect your account.', {durationMs: 5000});
     return;
@@ -210,39 +209,39 @@ async function handlePlayerCommand(session: TpaSession, sessionId: string, comma
   try {
     switch (command) {
       case PlayerCommand.CURRENT:
-        await displayCurrentlyPlaying(session, sessionId);
+        await displayCurrentlyPlaying(session, userId);
         break;
 
       case PlayerCommand.NEXT:
-        await spotifyService.nextTrack(sessionId);
-        await displayCurrentlyPlaying(session, sessionId);
+        await spotifyService.nextTrack(userId);
+        await displayCurrentlyPlaying(session, userId);
         break;
       
       case PlayerCommand.BACK:
-        await spotifyService.previousTrack(sessionId);
-        await displayCurrentlyPlaying(session, sessionId);
+        await spotifyService.previousTrack(userId);
+        await displayCurrentlyPlaying(session, userId);
         break;
       
       case PlayerCommand.PLAY:
-        await spotifyService.playTrack(sessionId);
-        await displayCurrentlyPlaying(session, sessionId);
+        await spotifyService.playTrack(userId);
+        await displayCurrentlyPlaying(session, userId);
         break;
 
       case PlayerCommand.PAUSE:
-        await spotifyService.pauseTrack(sessionId);
-        await displayCurrentlyPlaying(session, sessionId);
+        await spotifyService.pauseTrack(userId);
+        await displayCurrentlyPlaying(session, userId);
         break;
 
       default:
         logger.warn(`Unhandled player command: ${command}`, {
-          sessionId: sessionId,
+          userId: userId,
           command: command
         });
         break;
     }
   } catch (error){
     logger.error(`Spotify API error during command ${command}`, {
-      sessionId: sessionId,
+      userId: userId,
       command: command,
       error: {
         message: error.message,
@@ -253,8 +252,8 @@ async function handlePlayerCommand(session: TpaSession, sessionId: string, comma
     });
     
     if (error.message?.includes('NO_ACTIVE_DEVICE')) { 
-      logger.warn(`[Session ${sessionId}] No active device detected for command '${command}'. Auto-triggereing device list.`);
-      await triggerDeviceList(session, sessionId, command);
+      logger.warn(`[User ${userId}] No active device detected for command '${command}'. Auto-triggereing device list.`);
+      await triggerDeviceList(session, userId, command);
     } else  {
       let userMessage = 'Error executing command. Please try again.';
       
@@ -268,9 +267,9 @@ async function handlePlayerCommand(session: TpaSession, sessionId: string, comma
 }
 
 // Display the currently playing track
-export async function displayCurrentlyPlaying(session: TpaSession, sessionId: string): Promise<void> {
+export async function displayCurrentlyPlaying(session: TpaSession, userId: string): Promise<void> {
   try {
-    const tokenValid = await spotifyService.refreshTokenIfNeeded(sessionId);
+    const tokenValid = await spotifyService.refreshTokenIfNeeded(userId);
     if (!tokenValid) {
       session.layouts.showTextWall('Error with spotify authentication. Please reconnect your account.');
       return;
@@ -278,10 +277,10 @@ export async function displayCurrentlyPlaying(session: TpaSession, sessionId: st
 
     // Sleep to give time for spotify to update currently playing
     await sleep(500)
-    const playbackInfo = await spotifyService.getCurrentlyPlaying(sessionId);
-    logger.debug(`[Session ${sessionId}] Fetched playback info from Spotify.`, {
+    const playbackInfo = await spotifyService.getCurrentlyPlaying(userId);
+    logger.debug(`[User ${userId}] Fetched playback info from Spotify.`, {
       playbackInfo: playbackInfo,
-      sessionId: sessionId
+      userId: userId
     });
     
     // Ceck for the required info
@@ -300,7 +299,7 @@ export async function displayCurrentlyPlaying(session: TpaSession, sessionId: st
     }
   } catch (error) {
     logger.error(`Error displaying current track`, {
-      sessionId: sessionId,
+      userId: userId,
       error: {
         message: error.message,
         stack: error.stack,
@@ -312,19 +311,19 @@ export async function displayCurrentlyPlaying(session: TpaSession, sessionId: st
   }
 }
 
-function getSessionState(sessionId: string): SessionState {
+function getSessionState(userId: string): SessionState {
   // Check for sessionState
-  if (!sessionStates.has(sessionId)) {
-    logger.warn(`[Session ${sessionId}] State not found, initializing to IDLE.`);
-    sessionStates.set(sessionId, {mode: SessionMode.IDLE, timeoutId: null, pendingCommand: undefined});
+  if (!sessionStates.has(userId)) {
+    logger.warn(`[User ${userId}] State not found, initializing to IDLE.`);
+    sessionStates.set(userId, {mode: SessionMode.IDLE, timeoutId: null, pendingCommand: undefined});
   }
 
-  // Return sessionState for sessionId
-  return sessionStates.get(sessionId)!;
+  // Return sessionState for userId
+  return sessionStates.get(userId)!;
 }
 
-function setSessionMode(session: TpaSession, sessionId: string, newMode: SessionMode, options?: {data?: any; timeoutMs?: number; timeoutMessage?: string, pendingCommand?: PlayerCommand}): void {
-  const currentState = getSessionState(sessionId);
+function setSessionMode(session: TpaSession, userId: string, newMode: SessionMode, options?: {data?: any; timeoutMs?: number; timeoutMessage?: string, pendingCommand?: PlayerCommand}): void {
+  const currentState = getSessionState(userId);
 
   if (currentState.timeoutId) {
     // Clear timeout to set new one
@@ -334,14 +333,14 @@ function setSessionMode(session: TpaSession, sessionId: string, newMode: Session
   let newTimeoutId: NodeJS.Timeout | null = null;
   if (options?.timeoutMs) {
     newTimeoutId = setTimeout(() => {
-      logger.info(`[Session ${sessionId}] Timeout reached for mode ${SessionMode[newMode]}. Resetting to IDLE.`, {
-        sessionId: sessionId,
+      logger.info(`[User ${userId}] Timeout reached for mode ${SessionMode[newMode]}. Resetting to IDLE.`, {
+        userId: userId,
         newMode: SessionMode[newMode]
       })
-      const timedOutState = sessionStates.get(sessionId);
+      const timedOutState = sessionStates.get(userId);
       if (timedOutState && timedOutState.mode === newMode) {
         // Reset session to IDLE on timeout spread(...) old state for futureproofing
-        sessionStates.set(sessionId, {...timedOutState, mode: SessionMode.IDLE, timeoutId: null, data: undefined, pendingCommand: undefined});
+        sessionStates.set(userId, {...timedOutState, mode: SessionMode.IDLE, timeoutId: null, data: undefined, pendingCommand: undefined});
         session.layouts.showTextWall(options.timeoutMessage || 'Action timed out.', {durationMs: 5000});
       }
     }, options.timeoutMs);
@@ -355,42 +354,42 @@ function setSessionMode(session: TpaSession, sessionId: string, newMode: Session
     pendingCommand: options?.pendingCommand
   };
 
-  sessionStates.set(sessionId, newState);
-  logger.info(`[Session ${sessionId}] Mode changed to ${SessionMode[newMode]}`, {
+  sessionStates.set(userId, newState);
+  logger.info(`[User ${userId}] Mode changed to ${SessionMode[newMode]}`, {
     newMode: SessionMode[newMode],
-    sessionId: sessionId,
+    userId: userId,
     hasData: options?.data !== undefined,
     timeoutSet: options?.timeoutMs !== undefined,
     pendingCommandSet: options?.pendingCommand !== undefined
   });
 }
 
-async function triggerShazam(session: TpaSession, sessionId: string): Promise<void> {
-  logger.info(`[Session ${sessionId}] Triggering shazam listening mode.`, {
-    sessionId: sessionId
+async function triggerShazam(session: TpaSession, userId: string): Promise<void> {
+  logger.info(`[User ${userId}] Triggering shazam listening mode.`, {
+    userId: userId
   });
-  await enterShazamMode(session, sessionId);
+  await enterShazamMode(session, userId);
 }
 
-async function enterShazamMode(session: TpaSession, sessionId: string): Promise<void> {
+async function enterShazamMode(session: TpaSession, userId: string): Promise<void> {
   session.layouts.showTextWall('Listening for song...', {durationMs: 10000 - 500});
   // Update session mode to LISTENING_FOR_SHAZAM
-  setSessionMode(session, sessionId, SessionMode.LISTENING_FOR_SHAZAM, {
+  setSessionMode(session, userId, SessionMode.LISTENING_FOR_SHAZAM, {
     timeoutMs: 10000,
     timeoutMessage: 'Shazam cancelled. No speech detected.'
   });
 }
 
-async function handleShazamInput(session: TpaSession, sessionId: string, transcript: string): Promise<void> {
-  logger.info(`[Session ${sessionId}] Processing Shazam input: "${transcript}"`, {
-    sessionId: sessionId,
+async function handleShazamInput(session: TpaSession, userId: string, transcript: string): Promise<void> {
+  logger.info(`[User ${userId}] Processing Shazam input: "${transcript}"`, {
+    userId: userId,
     transcript: transcript
   });
-  setSessionMode(session, sessionId, SessionMode.IDLE);
+  setSessionMode(session, userId, SessionMode.IDLE);
 
   if (!transcript || transcript.trim().length === 0) {
-    logger.info(`[Session ${sessionId}] Empty transcript received for Shazam.`, {
-      sessionId: sessionId
+    logger.info(`[User ${userId}] Empty transcript received for Shazam.`, {
+      userId: userId
     });
     session.layouts.showTextWall('Could not identify song (no speech).', {durationMs: 5000});
     return;
@@ -410,8 +409,8 @@ async function handleShazamInput(session: TpaSession, sessionId: string, transcr
       session.layouts.showTextWall(`Could not identify song for "${transcript.substring(0, 30)}${transcript.length > 30 ? '...' : ''}"`, {durationMs: 5000});
     }
   } catch (error) {
-    logger.error(`[Session ${sessionId}] Shazam service error`, {
-      sessionId: sessionId,
+    logger.error(`[User ${userId}] Shazam service error`, {
+      userId: userId,
       transcript: transcript,
       error: {
         message: error.message,
@@ -424,45 +423,45 @@ async function handleShazamInput(session: TpaSession, sessionId: string, transcr
   }
 }
 
-async function triggerDeviceList(session: TpaSession, sessionId: string, pendingCommand?: PlayerCommand): Promise<void> {
-  logger.info(`[Session ${sessionId}] Triggering device list and selection mode.`, {
+async function triggerDeviceList(session: TpaSession, userId: string, pendingCommand?: PlayerCommand): Promise<void> {
+  logger.info(`[User ${userId}] Triggering device list and selection mode.`, {
     pendingCommand: pendingCommand
   });
   try {
-    const tokenValid = await spotifyService.refreshTokenIfNeeded(sessionId);
+    const tokenValid = await spotifyService.refreshTokenIfNeeded(userId);
     if (!tokenValid) {
       session.layouts.showTextWall('Spotify connection issue. Please reconnect account.', { durationMs: 5000 });
-      setSessionMode(session, sessionId, SessionMode.IDLE);
+      setSessionMode(session, userId, SessionMode.IDLE);
       return;
     }
 
-    const devices = await spotifyService.getDevice(sessionId);
+    const devices = await spotifyService.getDevice(userId);
     const deviceArray: DeviceInfo[] = devices.map((device: any) => ({
       name: device.name, type: device.type, id: device.id,
     }));
 
-    logger.debug(`[Session ${sessionId}] Found devices:`, deviceArray);
+    logger.debug(`[User ${userId}] Found devices:`, deviceArray);
 
     if (deviceArray.length === 0) {
       session.layouts.showTextWall('Open Spotify on a device to begin playback.', { durationMs: 5000 });
-      setSessionMode(session, sessionId, SessionMode.IDLE);
+      setSessionMode(session, userId, SessionMode.IDLE);
     } else if (deviceArray.length === 1) {
       session.layouts.showTextWall(`Playing on: ${deviceArray[0].name} (${deviceArray[0].type})`, { durationMs: 5000 });
       // Auto set device since there's only one
-      await spotifyService.setDevice(sessionId, [deviceArray[0].id]);
-      setSessionMode(session, sessionId, SessionMode.IDLE);
+      await spotifyService.setDevice(userId, [deviceArray[0].id]);
+      setSessionMode(session, userId, SessionMode.IDLE);
       if (pendingCommand) {
-        logger.info(`[Session ${sessionId}] Single device auto-selected. Retrying pending command: ${pendingCommand}`);
+        logger.info(`[User ${userId}] Single device auto-selected. Retrying pending command: ${pendingCommand}`);
         await sleep(500);
-        await handlePlayerCommand(session, sessionId, pendingCommand)
+        await handlePlayerCommand(session, userId, pendingCommand)
       }
     } else {
       // More than one device, enter selection mode
-      await enterDeviceSelectionMode(session, sessionId, deviceArray, pendingCommand);
+      await enterDeviceSelectionMode(session, userId, deviceArray, pendingCommand);
     }
   } catch (error) {
-    logger.error(`[Session ${sessionId}] Error fetching devices for listing.`, {
-      sessionId: sessionId,
+    logger.error(`[User ${userId}] Error fetching devices for listing.`, {
+      userId: userId,
       error: {
         message: error.message,
         stack: error.stack,
@@ -471,11 +470,11 @@ async function triggerDeviceList(session: TpaSession, sessionId: string, pending
       }
     });
     session.layouts.showTextWall('Error getting Spotify device list.', { durationMs: 5000 });
-    setSessionMode(session, sessionId, SessionMode.IDLE);
+    setSessionMode(session, userId, SessionMode.IDLE);
   }
 }
 
-async function enterDeviceSelectionMode(session: TpaSession, sessionId: string, devices: DeviceInfo[], pendingCommand?: PlayerCommand): Promise<void> {
+async function enterDeviceSelectionMode(session: TpaSession, userId: string, devices: DeviceInfo[], pendingCommand?: PlayerCommand): Promise<void> {
   const devicesToShow = devices.slice(0, 3);
   let deviceList = 'Say the number to select device:\n\n';
 
@@ -488,7 +487,7 @@ async function enterDeviceSelectionMode(session: TpaSession, sessionId: string, 
   }
 
   session.layouts.showTextWall(deviceList.trim(), {durationMs: 10000 - 500});
-  setSessionMode(session, sessionId, SessionMode.AWAITING_DEVICE_SELECTION, {
+  setSessionMode(session, userId, SessionMode.AWAITING_DEVICE_SELECTION, {
     data: devicesToShow,
     timeoutMs: 10000,
     timeoutMessage: 'Device selection cancelled (timeout).',
@@ -496,14 +495,14 @@ async function enterDeviceSelectionMode(session: TpaSession, sessionId: string, 
   });
 }
 
-async function handleDeviceSelectionInput(session: TpaSession, sessionId: string, transcript: string, availableDevices: DeviceInfo[]): Promise<void> {
-  logger.debug(`[Session ${sessionId}] Processing device selection input: "${transcript}"`);
-  const stateBeforeReset = getSessionState(sessionId);
+async function handleDeviceSelectionInput(session: TpaSession, userId: string, transcript: string, availableDevices: DeviceInfo[]): Promise<void> {
+  logger.debug(`[User ${userId}] Processing device selection input: "${transcript}"`);
+  const stateBeforeReset = getSessionState(userId);
   const commandToRetry = stateBeforeReset.pendingCommand;
-  setSessionMode(session, sessionId, SessionMode.IDLE);
+  setSessionMode(session, userId, SessionMode.IDLE);
 
   if (!availableDevices || availableDevices.length === 0) {
-    logger.warn(`[Session ${sessionId}] Device selection input received, but no devices were stored in state.`);
+    logger.warn(`[User ${userId}] Device selection input received, but no devices were stored in state.`);
     session.layouts.showTextWall('Internal error: Device list lost.', { durationMs: 5000 });
     return;
   }
@@ -515,29 +514,29 @@ async function handleDeviceSelectionInput(session: TpaSession, sessionId: string
     const selectedDevice = availableDevices[selectedDeviceIndex];
 
      if (!selectedDevice || !selectedDevice.id) {
-        logger.warn(`[Session ${sessionId}] Internal error: Invalid device found at index ${selectedDeviceIndex}`);
+        logger.warn(`[User ${userId}] Internal error: Invalid device found at index ${selectedDeviceIndex}`);
         session.layouts.showTextWall('Internal error selecting device.', { durationMs: 5000 });
         return;
      }
 
-    logger.info(`[Session ${sessionId}] User selected device number ${selectedNumber}: ${selectedDevice.name} (ID: ${selectedDevice.id})`);
+    logger.info(`[User ${userId}] User selected device number ${selectedNumber}: ${selectedDevice.name} (ID: ${selectedDevice.id})`);
     session.layouts.showTextWall(`Selecting: ${selectedDevice.name}...`, { durationMs: 5000 });
 
     try {
-      await spotifyService.setDevice(sessionId, [selectedDevice.id]);
-      logger.debug(`[Session ${sessionId}] Successfully set device to ${selectedDevice.id}`);
+      await spotifyService.setDevice(userId, [selectedDevice.id]);
+      logger.debug(`[User ${userId}] Successfully set device to ${selectedDevice.id}`);
       session.layouts.showTextWall(`Device set to: ${selectedDevice.name}`, { durationMs: 5000 });
 
       if (commandToRetry) {
-        logger.info(`[Session ${sessionId}] Device selected. Retrying original command: ${commandToRetry}`);
+        logger.info(`[User ${userId}] Device selected. Retrying original command: ${commandToRetry}`);
         await sleep(500);
-        await handlePlayerCommand(session, sessionId, commandToRetry);
+        await handlePlayerCommand(session, userId, commandToRetry);
       } else {
-        await displayCurrentlyPlaying(session, sessionId);
+        await displayCurrentlyPlaying(session, userId);
       }
     } catch (error) {
-      logger.error(`[Session ${sessionId}] Error setting Spotify device.`, {
-        sessionId: sessionId,
+      logger.error(`[User ${userId}] Error setting Spotify device.`, {
+        userId: userId,
         selectedNumber: selectedNumber,
         devices: availableDevices,
         error: {
@@ -550,7 +549,7 @@ async function handleDeviceSelectionInput(session: TpaSession, sessionId: string
       session.layouts.showTextWall(`Error selecting ${selectedDevice.name}.`, { durationMs: 5000 });
     }
   } else {
-    logger.info(`[Session ${sessionId}] Invalid device selection input: "${transcript}" (Parsed: ${selectedNumber})`);
+    logger.info(`[User ${userId}] Invalid device selection input: "${transcript}" (Parsed: ${selectedNumber})`);
     let feedback = 'Invalid selection.';
     if (selectedNumber !== null) {
       feedback = `Please say a number between 1 and ${availableDevices.length}.`;
