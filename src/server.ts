@@ -5,7 +5,6 @@ import {config} from './config/environment';
 import {tokenService} from './services/token-service';
 import {setupSessionHandlers, displayCurrentlyPlaying} from './handlers/session-handler';
 import logger from './utils/logger';
-import { resolveNaptr } from 'dns';
 
 // Keep track of active sessions
 export const activeSessions = new Map<string, TpaSession>();

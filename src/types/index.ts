@@ -1,4 +1,4 @@
-import {SessionMode} from "../handlers/session-handler";
+import {SessionMode, PlayerCommand} from "../handlers/session-handler";
 
 export interface SpotifyCredentials {
   accessToken: string;
@@ -16,4 +16,5 @@ export interface SessionState {
   mode: SessionMode;
   timeoutId: NodeJS.Timeout | null;
   data?: any;
+  pendingCommand?: PlayerCommand;
 }
