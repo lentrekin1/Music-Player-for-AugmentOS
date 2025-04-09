@@ -136,7 +136,7 @@ export function setupSessionHandlers(session: TpaSession, userId: string, settin
   }
 
   // Check if heads up display is enabled from settings
-  if (settings.isHeadsUpDisplay.value) {
+  if (settings.isHeadsUpDisplay?.value) {
     // Head position events
     const headPositionHandler = session.events.onHeadPosition(async (data) => {
       if (data.position === 'up') {
