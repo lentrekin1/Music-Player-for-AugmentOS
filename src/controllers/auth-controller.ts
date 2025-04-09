@@ -2,7 +2,6 @@ import {Router, Request, Response} from 'express';
 import {spotifyService} from '../services/spotify-service';
 import {server} from '../server';
 import {displayCurrentlyPlaying} from '../handlers/session-handler';
-import {server} from '../server'
 import logger from '../utils/logger'
 import path from 'path'
 

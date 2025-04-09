@@ -5,9 +5,6 @@ import {config} from './config/environment';
 import {tokenService} from './services/token-service';
 import {setupSessionHandlers, displayCurrentlyPlaying} from './handlers/session-handler';
 import logger from './utils/logger';
-import { setEngine } from 'crypto';
-
-// Keep track of active sessions
 
 export class MusicPlayerServer extends TpaServer {
   private activeUserSessions = new Map<string, {session: TpaSession, sessionId: string}>();
@@ -64,7 +61,7 @@ export class MusicPlayerServer extends TpaServer {
     }
 
     // Set up event handlers for this session and get the cleanup handlers
-    const handlers = setupSessionHandlers(session, userId, this.appSettings);
+    const handlers = setupSessionHandlers(session, userId);
     
     // Use the parent class's addCleanupHandler method instead of managing our own array
     handlers.forEach(handler => this.addCleanupHandler(handler));
