@@ -31,6 +31,11 @@ Music Player is an app that allows for integration with spotify to control your 
    bun run index.ts
    ```
 
+### Controls
+
+- Voice Commands
+- Heads Up Display
+
 ### Voice Commands
 
 - "What\'s playing", "Now playing", "Current song" - Display Now Playing music with artist and album
@@ -38,15 +43,16 @@ Music Player is an app that allows for integration with spotify to control your 
 - "Previous song", "Rewind" - Plays the previous in queue
 - "Play" - Starts or resumes music
 - "Pause" - Stop or pauses music
+- "Change devices", "List devices" - Changes the player/device for music
 - "Shazam", "Find song" - Listens to surroundings for lyrics to search
 
 ## Development
 
 ### Adding Controls
 
-1. Add touch controls for playing, skipping, & rewinding songs
-2. Play music on last device or selection of device
-3. Pick playlist
+1. Like current song / Add to playlist
+2. Play playlist or song (transcription)
+3. Add touch controls for playing, skipping, & rewinding songs (waiting for implementation)
 
 ### Planned
 
