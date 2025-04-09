@@ -8,19 +8,10 @@ import logger from './utils/logger';
 import { setEngine } from 'crypto';
 
 // Keep track of active sessions
-export const activeSessions = new Map<string, {session: TpaSession, sessionId: string}>();
 
 export class MusicPlayerServer extends TpaServer {
-  private appSettings = {
-    isHeadsUpDisplay: {
-      key: "heads_up_display",
-      value: false,
-    },
-    isVoiceCommands: {
-      key: "voice_commands",
-      value: true,
-    }
-  };
+  private activeUserSessions = new Map<string, {session: TpaSession, sessionId: string}>();
+  private appSettings = new Map<string, any>
 
   constructor() {
     super({
@@ -32,33 +23,6 @@ export class MusicPlayerServer extends TpaServer {
     // Get the Express app for adding custom routes
     const app = this.getExpressApp();
 
-    app.post('/settings', async (req: any, res: any) => {
-      try {
-        const {userIdForSettings, settings} = req.body;
-
-        logger.debug(req.body);
-        
-        if (!userIdForSettings || !Array.isArray(settings)) {
-          return res.send({error: 'Missing userId or settings array in payload'});
-        }
-    
-        const result = await this.setSettings(userIdForSettings, undefined, undefined, settings);
-        res.json(result);
-      } catch (error) {
-        logger.error('Error in settings endpoint.', {
-          req: req,
-          res: res,
-          error: {
-            message: error.message,
-            stack: error.stack,
-            responseStatus: error.response?.status,
-            responseBody: error.response?.data 
-          }
-        });
-        res.send({error: 'Internal server error updating settings'})
-      }
-    });
-    
     // Merge with our app that has auth routes set up
     const customApp = createExpressApp();
     app.use(customApp);
@@ -81,9 +45,9 @@ export class MusicPlayerServer extends TpaServer {
     });
     
     // Store session to access it later
-    this.setActiveSession(userId, session, sessionId)
+    this.setActiveUserSession(userId, session, sessionId)
 
-    await this.setSettings(userId, session, sessionId)
+    await this.pullSettings(userId, session, sessionId)
 
     // Check if user is already authenticated with Spotify
     if (tokenService.hasToken(userId)) {
@@ -115,33 +79,41 @@ export class MusicPlayerServer extends TpaServer {
     
     // The parent class will automatically handle the cleanup handlers
     // We just need to remove our session from the active sessions map
-    this.removeActiveSession(userId);
+    this.removeActiveUserSession(userId);
     
     // Call the parent class's onStop method to ensure proper cleanup
     await super.onStop(sessionId, userId, reason);
   }
 
-  public getActiveSession(userId: string): {session: TpaSession, sessionId: string} | null {
-    return activeSessions.get(userId) || null;
+  public getActiveUserSession(userId: string): {session: TpaSession, sessionId: string} | null {
+    return this.activeUserSessions.get(userId) || null;
   }
 
-  public setActiveSession(userId: string, session: TpaSession, sessionId: string): void {
-    activeSessions.set(userId, {session: session, sessionId: sessionId});
+  public setActiveUserSession(userId: string, session: TpaSession, sessionId: string): void {
+    this.activeUserSessions.set(userId, {session: session, sessionId: sessionId});
   }
 
-  public removeActiveSession(userId: string): void {
-    activeSessions.delete(userId);
+  public removeActiveUserSession(userId: string): void {
+    this.activeUserSessions.delete(userId);
   }
 
-  private async setSettings(userId: string, session?: TpaSession, sessionId?:string, providedSettings?: any[]): Promise<any> {
+  public getSettings(): Map<string, any> {
+    return this.appSettings
+  }
+
+  public setSettings(key: string, value: any): void {
+    this.appSettings.set(key, value);
+  }
+
+  public async pullSettings(userId: string, session?: TpaSession, sessionId?:string, providedSettings?: any[]): Promise<any> {
     try {
       if (!session || !sessionId) {
         logger.info(`No session provided for user ${userId}, looking for active session`);
-        const activeSession = this.getActiveSession(userId);
+        const activeSession = this.getActiveUserSession(userId);
         
         if (activeSession) {
           logger.debug(`Found active session ${activeSession.sessionId} for user ${userId}, using it`);
-          return this.setSettings(userId, activeSession.session, activeSession.sessionId, providedSettings);
+          return this.pullSettings(userId, activeSession.session, activeSession.sessionId, providedSettings);
         } else {
           logger.debug(`No active session found for user ${userId}, cannot process settings`);
           return {
@@ -165,13 +137,15 @@ export class MusicPlayerServer extends TpaServer {
         logger.info(`Using provided settings for user: ${userId}`);
       }
 
-      this.appSettings.isHeadsUpDisplay = settings.find((s: any) => s.key === 'heads_up_display');
-      this.appSettings.isVoiceCommands = settings.find((s: any) => s.key === 'voice_commands');
-      logger.info(`Applied settings for user ${userId}: headsUpDisplay=${this.appSettings.isHeadsUpDisplay.value}, voiceCommands=${this.appSettings.isVoiceCommands.value}`);
+      settings.forEach(setting => {
+        this.setSettings(setting.key, setting.value);
+      })
+
+      logger.info(`Applied settings for user ${userId}: headsUpDisplay=${this.appSettings.get('heads_up_display')}, voiceCommands=${this.appSettings.get('voice_commands')}`);
       return {
         status: 'Settings updated successfully',
-        headsUpDisplay: this.appSettings.isHeadsUpDisplay,
-        voiceCommands: this.appSettings.isVoiceCommands
+        headsUpDisplay: this.appSettings.get('heads_up_display'),
+        voiceCommands: this.appSettings.get('voice_commands')
       };
     } catch (error){
       logger.error(`Error fetching settings for user ${userId}.`, {
@@ -188,4 +162,4 @@ export class MusicPlayerServer extends TpaServer {
   }
 }
 
-
+export const server = new MusicPlayerServer();
