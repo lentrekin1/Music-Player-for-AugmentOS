@@ -5,10 +5,10 @@ import {config} from './config/environment';
 import {tokenService} from './services/token-service';
 import {setupSessionHandlers, displayCurrentlyPlaying} from './handlers/session-handler';
 import logger from './utils/logger';
+import {SettingKey, ProcessedUserSettings} from './types/index'
 
 export class MusicPlayerServer extends TpaServer {
   private activeUserSessions = new Map<string, {session: TpaSession, sessionId: string}>();
-  private appSettings = new Map<string, any>
 
   constructor() {
     super({
@@ -44,7 +44,7 @@ export class MusicPlayerServer extends TpaServer {
     // Store session to access it later
     this.setActiveUserSession(userId, session, sessionId)
 
-    await this.pullSettings(userId, session, sessionId)
+    const userSettings = await this.pullUserSettings(userId)
 
     // Check if user is already authenticated with Spotify
     if (tokenService.hasToken(userId)) {
@@ -61,7 +61,7 @@ export class MusicPlayerServer extends TpaServer {
     }
 
     // Set up event handlers for this session and get the cleanup handlers
-    const handlers = setupSessionHandlers(session, userId);
+    const handlers = setupSessionHandlers(session, userId, userSettings);
     
     // Use the parent class's addCleanupHandler method instead of managing our own array
     handlers.forEach(handler => this.addCleanupHandler(handler));
@@ -94,60 +94,52 @@ export class MusicPlayerServer extends TpaServer {
     this.activeUserSessions.delete(userId);
   }
 
-  public getSettings(): Map<string, any> {
-    return this.appSettings
-  }
-
-  public setSettings(key: string, value: any): void {
-    this.appSettings.set(key, value);
-  }
-
-  public async pullSettings(userId: string, session?: TpaSession, sessionId?:string, providedSettings?: any[]): Promise<any> {
+  public async pullUserSettings(userId: string): Promise<any | null> {
     try {
-      if (!session || !sessionId) {
-        logger.info(`No session provided for user ${userId}, looking for active session`);
-        const activeSession = this.getActiveUserSession(userId);
-        
-        if (activeSession) {
-          logger.debug(`Found active session ${activeSession.sessionId} for user ${userId}, using it`);
-          return this.pullSettings(userId, activeSession.session, activeSession.sessionId, providedSettings);
-        } else {
-          logger.debug(`No active session found for user ${userId}, cannot process settings`);
-          return {
-            status: 'Failed to process settings',
-            error: 'No active session available',
-            userId
-          };
-        }
-      }
+      logger.info(`Fetching settings for user ${userId}`);
+      const response = await axios.get(`http://cloud.augmentos.org/tpasettings/user/${config.augmentOS.packageName}`, {
+        headers: { Authorization: `Bearer ${userId}` }
+      });
+      const settingsArray: any[] = response.data.settings;
+      logger.info(`Fetched settings for user ${userId}: ${settingsArray}`);
 
-      let settings: any[] = providedSettings || [];
-
-      if (!providedSettings) {
-        logger.info(`Fetching settings for user ${userId}`);
-        const response = await axios.get(`http://cloud.augmentos.org/tpasettings/user/${config.augmentOS.packageName}`, {
-          headers: { Authorization: `Bearer ${userId}` }
-        });
-        settings = response.data.settings;
-        logger.info(`Fetched settings for user ${userId}: ${settings}`);
-      } else {
-        logger.info(`Using provided settings for user: ${userId}`);
-      }
-
-      settings.forEach(setting => {
-        this.setSettings(setting.key, setting.value);
-      })
-
-      logger.info(`Applied settings for user ${userId}: headsUpDisplay=${this.appSettings.get('heads_up_display')}, voiceCommands=${this.appSettings.get('voice_commands')}`);
-      return {
-        status: 'Settings updated successfully',
-        headsUpDisplay: this.appSettings.get('heads_up_display'),
-        voiceCommands: this.appSettings.get('voice_commands')
+      const processedSettings: ProcessedUserSettings = {
+        musicPlayer: 'spotify',
+        isVoiceCommands: true,
+        isHeadsUpDisplay: false,
       };
+
+      settingsArray.forEach(setting => {
+        switch (setting.key) {
+          case SettingKey.MUSIC_PLAYER:
+            if (setting.value === 'android') {processedSettings.musicPlayer = 'android'}
+            else if (setting.value === 'ios') {processedSettings.musicPlayer = 'ios'}
+            else if (setting.value === 'spotify') {processedSettings.musicPlayer = 'spotify'}
+            else {
+              logger.warn(`[User ${userId}] Unknown music player value: ${setting.value}. Defaulting to spotify.`);
+              processedSettings.musicPlayer = 'spotify'
+            }
+            break;
+
+          case SettingKey.HEADS_UP_DISPLAY:
+            processedSettings.isHeadsUpDisplay = !!setting.value;
+            break;
+
+          case SettingKey.VOICE_COMMANDS:
+            processedSettings.isVoiceCommands = !!setting.value;
+            break;
+
+          default:
+            logger.warn(`[User ${userId}] Encountered unknown setting key: ${setting.key}`);
+            break;
+        }
+      });
+
+      logger.info(`Applied settings for user ${userId}: headsUpDisplay=${processedSettings.isHeadsUpDisplay}, voiceCommands=${processedSettings.isVoiceCommands}`);
+      return processedSettings;
     } catch (error){
       logger.error(`Error fetching settings for user ${userId}.`, {
         userId: userId,
-        providedSettings: providedSettings || [],
         error: {
           message: error.message,
           stack: error.stack,
@@ -155,6 +147,7 @@ export class MusicPlayerServer extends TpaServer {
           responseBody: error.response?.data 
         }
       });
+      return null;
     }
   }
 }

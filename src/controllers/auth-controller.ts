@@ -1,6 +1,5 @@
 import {Router, Request, Response} from 'express';
 import {spotifyService} from '../services/spotify-service';
-import {server} from '../server';
 import {displayCurrentlyPlaying} from '../handlers/session-handler';
 import logger from '../utils/logger'
 import path from 'path'
@@ -64,34 +63,6 @@ router.get('/tpa_config.json', async (req: Request, res: Response) => {
     });
     res.send('Error retrieving tpa_config.json')
   }
-})
-
-router.post('/settings', async (req: any, res: any) => {
-  try {
-    const {userIdForSettings, settings} = req.body;
-
-    logger.debug(req.body);
-    
-    if (!userIdForSettings || !Array.isArray(settings)) {
-      return res.send({error: 'Missing userId or settings array in payload'});
-    }
-
-    const result = await server.pullSettings(userIdForSettings, undefined, undefined, settings);
-    res.json(result);
-  } catch (error) {
-    logger.error('Error in settings endpoint.', {
-      req: req,
-      res: res,
-      error: {
-        message: error.message,
-        stack: error.stack,
-        responseStatus: error.response?.status,
-        responseBody: error.response?.data 
-      }
-    });
-    res.send({error: 'Internal server error updating settings'})
-  }
 });
-
 
 export const authRoutes = router;

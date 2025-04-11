@@ -5,7 +5,6 @@ import {DeviceInfo, SessionState} from '../types'
 import {tokenService} from '../services/token-service';
 import {spotifyService} from '../services/spotify-service';
 import {shazamService} from '../services/shazam-service';
-import {server} from '../server'
 
 // Player command actions
 export enum PlayerCommand {
@@ -41,10 +40,10 @@ const triggerPhases = {
 }
 
 // Set up session event handlers
-export function setupSessionHandlers(session: TpaSession, userId: string): Array<() => void> {
+export function setupSessionHandlers(session: TpaSession, userId: string, userSettings: any): Array<() => void> {
   // Array for handler cleanup
   const cleanupHandlers: Array<() => void> = [];
-  const settings = server.getSettings()
+  const settings = userSettings
   logger.debug(settings);
 
   // Initialize base sessionState to idle
@@ -55,7 +54,7 @@ export function setupSessionHandlers(session: TpaSession, userId: string): Array
   });
 
   // Check if voice commands are enabled from settings
-  if (settings.get('voice_commands')) {
+  if (settings.isVoiceCommands) {
     // Listen for user command via transcription
     const transcriptionHandler = session.events.onTranscription(async (data) => {
       logger.debug(`[User ${userId}] Received transcription data.`, {
@@ -138,7 +137,7 @@ export function setupSessionHandlers(session: TpaSession, userId: string): Array
   }
 
   // Check if heads up display is enabled from settings
-  if (settings.get('heads_up_display')) {
+  if (settings.isHeadsUpDisplay) {
     // Head position events
     const headPositionHandler = session.events.onHeadPosition(async (data) => {
       if (data.position === 'up') {
