@@ -2,8 +2,9 @@ import SpotifyWebApi from 'spotify-web-api-node';
 import {tokenService} from './token-service';
 import {config} from '../config/environment';
 import logger from '../utils/logger'
+import {PlaybackInfo, MusicPlayerService} from '../types/index'
 
-export class SpotifyService {
+export class SpotifyService implements MusicPlayerService{
   private spotifyApi: SpotifyWebApi;
 
   constructor() {
@@ -77,7 +78,7 @@ export class SpotifyService {
     }
   }
 
-  public async getCurrentlyPlaying(userId: string): Promise<{isPlaying: boolean; trackName?: string; artists?: string; albumName?: string;}> {
+  public async getCurrentlyPlaying(userId: string): Promise<PlaybackInfo | null> {
     const credentials = tokenService.getToken(userId)
 
     if (!credentials) {
@@ -104,7 +105,7 @@ export class SpotifyService {
       };
     }
     
-    return {isPlaying: false};
+    return null;
   }
 
   public async playTrack(userId: string): Promise<void> {

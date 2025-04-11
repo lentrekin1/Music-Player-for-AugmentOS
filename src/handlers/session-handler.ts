@@ -108,18 +108,18 @@ export function setupSessionHandlers(session: TpaSession, userId: string, userSe
           break;
 
         case SessionMode.AWAITING_DEVICE_SELECTION:
-          if (currentState.data && Array.isArray(currentState.data)) {
-            await handleDeviceSelectionInput(session, userId, lowerText, currentState.data as DeviceInfo[]);
+          if (currentState.data?.deviceInfo && Array.isArray(currentState.data.deviceInfo)) {
+            await handleDeviceSelectionInput(session, userId, lowerText, currentState.data.deviceInfo);
           } else {
             logger.warn(`[User ${userId}] Missing device data in AWAITING_DEVICE_SELECTION mode.`, {
               userId: userId,
               settings: settings,
               mode: currentState.mode,
               timeoutId: currentState.timeoutId,
-              currentStateData: currentState.data
+              currentStateData: currentState.data?.deviceInfo
             });
             session.layouts.showTextWall('Internal error: Device list missing.', {durationMs: 5000});
-            setSessionMode(session, userId, SessionMode.IDLE);
+            setSessionState(session, userId, SessionMode.IDLE);
           }
 
           break;
@@ -129,7 +129,7 @@ export function setupSessionHandlers(session: TpaSession, userId: string, userSe
             userId: userId,
             modeValue: currentState.mode
           });
-          setSessionMode(session, userId, SessionMode.IDLE);
+          setSessionState(session, userId, SessionMode.IDLE);
       }
     });
 
@@ -323,7 +323,7 @@ function getSessionState(userId: string): SessionState {
   return sessionStates.get(userId)!;
 }
 
-function setSessionMode(session: TpaSession, userId: string, newMode: SessionMode, options?: {data?: any; timeoutMs?: number; timeoutMessage?: string, pendingCommand?: PlayerCommand}): void {
+function setSessionState(session: TpaSession, userId: string, newMode: SessionMode, options?: {data?: any; timeoutMs?: number; timeoutMessage?: string, pendingCommand?: PlayerCommand}): void {
   const currentState = getSessionState(userId);
 
   if (currentState.timeoutId) {
@@ -340,29 +340,64 @@ function setSessionMode(session: TpaSession, userId: string, newMode: SessionMod
       })
       const timedOutState = sessionStates.get(userId);
       if (timedOutState && timedOutState.mode === newMode) {
-        // Reset session to IDLE on timeout spread(...) old state for futureproofing
         sessionStates.set(userId, {...timedOutState, mode: SessionMode.IDLE, timeoutId: null, data: undefined, pendingCommand: undefined});
         session.layouts.showTextWall(options.timeoutMessage || 'Action timed out.', {durationMs: 5000});
       }
     }, options.timeoutMs);
   }
 
-  // Set new state with provided parameters
+  let nextData: any = undefined;
+  if (newMode !== SessionMode.IDLE) {
+    nextData = {
+      // Always try to preserve musicPlayer unless explicitly overridden
+      musicPlayer: options?.data?.musicPlayer ?? currentState.data?.musicPlayer,
+      // Add mode-specific data if provided in options
+      ...(options?.data?.deviceInfo && newMode === SessionMode.AWAITING_DEVICE_SELECTION && { deviceInfo: options.data.deviceInfo }),
+    };
+
+    // Remove undefined properties if any were added conditionally
+    Object.keys(nextData).forEach(key => nextData[key] === undefined && delete nextData[key]);
+    if (Object.keys(nextData).length === 0) {
+      nextData = undefined;
+    }
+  } else {
+    // If returning to IDLE, only preserve musicPlayer from current state
+    if (currentState.data?.musicPlayer) {
+        nextData = {musicPlayer: currentState.data.musicPlayer};
+    } else {
+        nextData = undefined;
+    }
+  }
+
   const newState: SessionState = {
     mode: newMode,
     timeoutId: newTimeoutId,
-    data: options?.data,
-    pendingCommand: options?.pendingCommand
+    pendingCommand: options?.pendingCommand, // Only set pending command if explicitly passed in options, otherwise clear it (especially for IDLE)
+    data: nextData 
   };
 
+  // Handle timeout reset case separately
+  if (options?.timeoutMs && newTimeoutId) {
+    newTimeoutId = setTimeout(() => {
+      const timedOutState = sessionStates.get(userId);
+      if (timedOutState && timedOutState.mode === newMode) {
+        // Reset state to IDLE, preserving only musicPlayer from the timed-out state
+        sessionStates.set(userId, {
+          ...timedOutState,
+          mode: SessionMode.IDLE,
+          timeoutId: null,
+          pendingCommand: undefined, // Clear pending command on timeout
+          data: timedOutState.data?.musicPlayer ? {musicPlayer: timedOutState.data.musicPlayer} : undefined // Preserve only source
+        });
+        session.layouts.showTextWall(options.timeoutMessage || 'Action timed out.', {durationMs: 5000});
+      }
+    }, options.timeoutMs);
+
+    newState.timeoutId = newTimeoutId;
+  }
+  
   sessionStates.set(userId, newState);
-  logger.info(`[User ${userId}] Mode changed to ${SessionMode[newMode]}`, {
-    newMode: SessionMode[newMode],
-    userId: userId,
-    hasData: options?.data !== undefined,
-    timeoutSet: options?.timeoutMs !== undefined,
-    pendingCommandSet: options?.pendingCommand !== undefined
-  });
+  logger.info(`[User ${userId}] Mode changed to ${SessionMode[newMode]}`);
 }
 
 async function triggerShazam(session: TpaSession, userId: string): Promise<void> {
@@ -375,7 +410,7 @@ async function triggerShazam(session: TpaSession, userId: string): Promise<void>
 async function enterShazamMode(session: TpaSession, userId: string): Promise<void> {
   session.layouts.showTextWall('Listening for song...', {durationMs: 10000 - 500});
   // Update session mode to LISTENING_FOR_SHAZAM
-  setSessionMode(session, userId, SessionMode.LISTENING_FOR_SHAZAM, {
+  setSessionState(session, userId, SessionMode.LISTENING_FOR_SHAZAM, {
     timeoutMs: 10000,
     timeoutMessage: 'Shazam cancelled. No speech detected.'
   });
@@ -386,7 +421,7 @@ async function handleShazamInput(session: TpaSession, userId: string, transcript
     userId: userId,
     transcript: transcript
   });
-  setSessionMode(session, userId, SessionMode.IDLE);
+  setSessionState(session, userId, SessionMode.IDLE);
 
   if (!transcript || transcript.trim().length === 0) {
     logger.info(`[User ${userId}] Empty transcript received for Shazam.`, {
@@ -432,7 +467,7 @@ async function triggerDeviceList(session: TpaSession, userId: string, pendingCom
     const tokenValid = await spotifyService.refreshTokenIfNeeded(userId);
     if (!tokenValid) {
       session.layouts.showTextWall('Spotify connection issue. Please reconnect account.', { durationMs: 5000 });
-      setSessionMode(session, userId, SessionMode.IDLE);
+      setSessionState(session, userId, SessionMode.IDLE);
       return;
     }
 
@@ -445,12 +480,12 @@ async function triggerDeviceList(session: TpaSession, userId: string, pendingCom
 
     if (deviceArray.length === 0) {
       session.layouts.showTextWall('Open Spotify on a device to begin playback.', { durationMs: 5000 });
-      setSessionMode(session, userId, SessionMode.IDLE);
+      setSessionState(session, userId, SessionMode.IDLE);
     } else if (deviceArray.length === 1) {
       session.layouts.showTextWall(`Playing on: ${deviceArray[0].name} (${deviceArray[0].type})`, { durationMs: 5000 });
       // Auto set device since there's only one
       await spotifyService.setDevice(userId, [deviceArray[0].id]);
-      setSessionMode(session, userId, SessionMode.IDLE);
+      setSessionState(session, userId, SessionMode.IDLE);
       if (pendingCommand) {
         logger.info(`[User ${userId}] Single device auto-selected. Retrying pending command: ${pendingCommand}`);
         await sleep(500);
@@ -471,7 +506,7 @@ async function triggerDeviceList(session: TpaSession, userId: string, pendingCom
       }
     });
     session.layouts.showTextWall('Error getting Spotify device list.', { durationMs: 5000 });
-    setSessionMode(session, userId, SessionMode.IDLE);
+    setSessionState(session, userId, SessionMode.IDLE);
   }
 }
 
@@ -488,8 +523,12 @@ async function enterDeviceSelectionMode(session: TpaSession, userId: string, dev
   }
 
   session.layouts.showTextWall(deviceList.trim(), {durationMs: 10000 - 500});
-  setSessionMode(session, userId, SessionMode.AWAITING_DEVICE_SELECTION, {
-    data: devicesToShow,
+  const currentStateData = getSessionState(userId).data
+  setSessionState(session, userId, SessionMode.AWAITING_DEVICE_SELECTION, {
+    data: {
+      musicPlayer: currentStateData?.musicPlayer,
+      deviceInfo: devicesToShow
+    },
     timeoutMs: 10000,
     timeoutMessage: 'Device selection cancelled (timeout).',
     pendingCommand: pendingCommand
@@ -500,7 +539,7 @@ async function handleDeviceSelectionInput(session: TpaSession, userId: string, t
   logger.debug(`[User ${userId}] Processing device selection input: "${transcript}"`);
   const stateBeforeReset = getSessionState(userId);
   const commandToRetry = stateBeforeReset.pendingCommand;
-  setSessionMode(session, userId, SessionMode.IDLE);
+  setSessionState(session, userId, SessionMode.IDLE);
 
   if (!availableDevices || availableDevices.length === 0) {
     logger.warn(`[User ${userId}] Device selection input received, but no devices were stored in state.`);
