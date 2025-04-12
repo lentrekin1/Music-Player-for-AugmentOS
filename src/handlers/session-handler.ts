@@ -188,7 +188,7 @@ async function handlePlayerCommand(session: TpaSession, userId: string, command:
 
   // Check if user is authenticated
   if (!tokenService.hasToken(userId)) {
-    logger.debug(`Please connect your Spotify account first at ${config.server.webUrl}/login/${userId}`);
+    logger.info(`Please connect your Spotify account first at ${config.server.webUrl}/login/${userId}`);
     session.layouts.showTextWall(`Please connect your Spotify account first. ${config.server.webUrl}/login/${userId}`, {durationMs: 5000});
     return;
   }
@@ -289,7 +289,7 @@ export async function displayCurrentlyPlaying(session: TpaSession, userId: strin
       session.layouts.showTextWall(displayText, {durationMs: 5000});
     } else {
       // Nothing is playing
-      logger.debug('No track currently playing on Spotify');
+      logger.info('No track currently playing on Spotify');
       session.layouts.showTextWall('No track currently playing on Spotify', {durationMs: 5000});
     }
   } catch (error) {
