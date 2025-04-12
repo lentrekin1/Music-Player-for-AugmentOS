@@ -6,6 +6,7 @@ import {tokenService} from './services/token-service';
 import {setupSessionHandlers, displayCurrentlyPlaying} from './handlers/session-handler';
 import logger from './utils/logger';
 import {SettingKey, ProcessedUserSettings} from './types/index'
+import {setTimeout as sleep} from 'timers/promises';
 
 export class MusicPlayerServer extends TpaServer {
   private activeUserSessions = new Map<string, {session: TpaSession, sessionId: string}>();
@@ -40,6 +41,8 @@ export class MusicPlayerServer extends TpaServer {
       sessionId: sessionId,
       userId: userId
     });
+
+    // session.layouts.showTextWall('Starting', {durationMs: 5000});
     
     // Store session to access it later
     this.setActiveUserSession(userId, session, sessionId)
@@ -53,11 +56,12 @@ export class MusicPlayerServer extends TpaServer {
     } else {
       // User needs to authenticate
       const loginUrl = `${config.server.webUrl}/login/${userId}`;
-      logger.debug(loginUrl);
+      logger.info(loginUrl);
       session.layouts.showTextWall(
         `Please visit the following URL on your phone or computer to connect your Spotify account: ${loginUrl}`,
         {durationMs: 5000}
       );
+      await sleep(5000)
     }
 
     // Set up event handlers for this session and get the cleanup handlers

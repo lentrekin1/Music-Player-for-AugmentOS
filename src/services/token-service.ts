@@ -80,7 +80,7 @@ export class TokenService {
     if (this.userTokens.has(userId)) {
       this.userTokens.delete(userId);
       this.saveTokens();
-      console.log(`Removed token for session ${userId}`);
+      logger.info(`Removed token for session ${userId}`);
     }
   }
 
@@ -113,7 +113,7 @@ export class TokenService {
 
     try {
       fs.writeFileSync(this.tokenFilePath, JSON.stringify(tokensToSave, null, 2));
-      console.log('Tokens saved to file (encrypted)');
+      logger.info('Tokens saved to file (encrypted)');
     } catch (error) {
       logger.error('Error writing tokens file.', {
         filePath: this.tokenFilePath,

@@ -5,6 +5,7 @@ import {DeviceInfo, SessionState} from '../types'
 import {tokenService} from '../services/token-service';
 import {spotifyService} from '../services/spotify-service';
 import {shazamService} from '../services/shazam-service';
+import {config} from '../config/environment'
 
 // Player command actions
 export enum PlayerCommand {
@@ -44,14 +45,10 @@ export function setupSessionHandlers(session: TpaSession, userId: string, userSe
   // Array for handler cleanup
   const cleanupHandlers: Array<() => void> = [];
   const settings = userSettings
-  logger.debug(settings);
 
   // Initialize base sessionState to idle
   sessionStates.set(userId, {mode: SessionMode.IDLE, timeoutId: null, pendingCommand: undefined});
-  logger.info(`[User ${userId}] Initialized session state to IDLE.`, {
-    userId: userId,
-    settings: settings
-  });
+  logger.info(`[User ${userId}] Initialized session state to IDLE.`);
 
   // Check if voice commands are enabled from settings
   if (settings.isVoiceCommands) {
@@ -176,9 +173,7 @@ export function setupSessionHandlers(session: TpaSession, userId: string, userSe
       clearTimeout(state.timeoutId);
     }
     sessionStates.delete(userId);
-    logger.info(`[User ${userId}] Cleaned up session state.`, {
-      userId: userId 
-    });
+    logger.info(`[User ${userId}] Cleaned up session state.`);
   };
 
   cleanupHandlers.push(stateCleanup);
@@ -189,14 +184,12 @@ export function setupSessionHandlers(session: TpaSession, userId: string, userSe
 
 // Handle player commands
 async function handlePlayerCommand(session: TpaSession, userId: string, command: PlayerCommand): Promise<void> {
-  logger.info(`[User ${userId}] Handling command ${command}`, {
-    userId: userId,
-    command: command
-  });
+  logger.info(`[User ${userId}] Handling command ${command}`);
 
   // Check if user is authenticated
   if (!tokenService.hasToken(userId)) {
-    session.layouts.showTextWall('Please connect your Spotify account first.', {durationMs: 5000});
+    logger.debug(`Please connect your Spotify account first at ${config.server.webUrl}/login/${userId}`);
+    session.layouts.showTextWall(`Please connect your Spotify account first. ${config.server.webUrl}/login/${userId}`, {durationMs: 5000});
     return;
   }
 
@@ -296,6 +289,7 @@ export async function displayCurrentlyPlaying(session: TpaSession, userId: strin
       session.layouts.showTextWall(displayText, {durationMs: 5000});
     } else {
       // Nothing is playing
+      logger.debug('No track currently playing on Spotify');
       session.layouts.showTextWall('No track currently playing on Spotify', {durationMs: 5000});
     }
   } catch (error) {
