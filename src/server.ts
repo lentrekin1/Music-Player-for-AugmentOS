@@ -33,16 +33,22 @@ export class MusicPlayerServer extends TpaServer {
         });
       });
     }
+
+    this.addCleanupHandler(() => {
+      logger.info("Running shutdown cleanup for activeUserSessions map.");
+      this.activeUserSessions.clear();
+    });
   }
 
   // Called when new user connects to app
   protected async onSession(session: TpaSession, sessionId: string, userId: string): Promise<void> {
-    logger.info(`New session started: ${sessionId} for user: ${userId}`, {
-      sessionId: sessionId,
-      userId: userId
-    });
+    logger.info(`New session started: ${sessionId} for user: ${userId}`);
 
-    // session.layouts.showTextWall('Starting', {durationMs: 5000});
+    if (this.activeUserSessions.has(userId)) {
+      const oldSessionId = this.activeUserSessions.get(userId)?.sessionId;
+      logger.warn(`[User ${userId}] New session ${sessionId} starting, replacing previous session ${oldSessionId} in tracking map.`);
+      this.activeUserSessions.delete(userId);
+    }
     
     // Store session to access it later
     this.setActiveUserSession(userId, session, sessionId)
@@ -64,26 +70,41 @@ export class MusicPlayerServer extends TpaServer {
       await sleep(5000)
     }
 
+    const cleanupCallbackForThisSession = () => {
+      this.handleSessionCleanupComplete(userId, sessionId)
+    };
     // Set up event handlers for this session and get the cleanup handlers
-    const handlers = setupSessionHandlers(session, userId, userSettings);
+    const handler = setupSessionHandlers(session, sessionId, userId, userSettings, cleanupCallbackForThisSession);
     
     // Use the parent class's addCleanupHandler method instead of managing our own array
-    handlers.forEach(handler => this.addCleanupHandler(handler));
+    this.addCleanupHandler(handler);
   }
 
   protected async onStop(sessionId: string, userId: string, reason: string): Promise<void> {
-    logger.info(`Session stopped: ${sessionId} for user: ${userId}. Reason: ${reason}`, {
-      sessionId: sessionId, 
-      userId: userId,
-      reason: reason
-    });
+    logger.info(`onStop triggered stopped session: ${sessionId} for user: ${userId}. Reason: ${reason}`);
     
-    // The parent class will automatically handle the cleanup handlers
-    // We just need to remove our session from the active sessions map
-    this.removeActiveUserSession(userId);
+    const trackedSessionInfo = this.activeUserSessions.get(userId);
+    if (trackedSessionInfo && trackedSessionInfo.sessionId === sessionId) {
+      logger.warn(`[User ${userId}] Tracked session ${sessionId} stopped by onStop. Removing from activeUserSessions map. Cleanup relies on SDK detaching listeners.`);
+      this.removeActiveUserSession(userId);
+    } else {
+      logger.warn(`[User ${userId}] onStop received for session ${sessionId}, but it's not the currently tracked session (${trackedSessionInfo?.sessionId}) or user is untracked. No action needed by server map.`);
+    }
     
     // Call the parent class's onStop method to ensure proper cleanup
     await super.onStop(sessionId, userId, reason);
+  }
+
+  private handleSessionCleanupComplete(userId: string, sessionId: string): void {
+    logger.info(`[User ${userId}] Received cleanup complete notification for session ${sessionId}.`);
+    // Verify if the session being cleaned up is still the one we are tracking
+    const trackedInfo = this.activeUserSessions.get(userId);
+    if (trackedInfo && trackedInfo.sessionId === sessionId) {
+      logger.info(`[User ${userId}] Removing session ${sessionId} from active tracking map.`);
+      this.activeUserSessions.delete(userId);
+    } else {
+      logger.warn(`[User ${userId}] Cleanup complete notification for session ${sessionId}, but different session ${trackedInfo?.sessionId ?? 'none'} is tracked or user already removed.`);
+    }
   }
 
   public getActiveUserSession(userId: string): {session: TpaSession, sessionId: string} | null {

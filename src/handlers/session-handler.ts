@@ -41,7 +41,7 @@ const triggerPhases = {
 }
 
 // Set up session event handlers
-export function setupSessionHandlers(session: TpaSession, userId: string, userSettings: any): Array<() => void> {
+export function setupSessionHandlers(session: TpaSession, sessionId: string, userId: string, userSettings: any, onCleanupComplete: () => void): () => void {
   // Array for handler cleanup
   const cleanupHandlers: Array<() => void> = [];
   const settings = userSettings
@@ -168,18 +168,55 @@ export function setupSessionHandlers(session: TpaSession, userId: string, userSe
   cleanupHandlers.push(errorHandler);
 
   const stateCleanup = () => {
-    const state = sessionStates.get(userId);
-    if (state?.timeoutId) {
-      clearTimeout(state.timeoutId);
-    }
-    sessionStates.delete(userId);
-    logger.info(`[User ${userId}] Cleaned up session state.`);
+    logger.info(`[User ${userId}] Running specific state map cleanup.`);
+    clearSessionState(userId);
   };
 
-  cleanupHandlers.push(stateCleanup);
+  const disconnectHandler = session.events.onDisconnected((data) => {
+    logger.warn(`[Session ${sessionId}] onDisconnected event triggered for User ${userId}. Running cleanup.`);
+    if (!sessionStates.has(userId)) {
+      logger.info(`[User ${userId}] State already cleared before onDisconnected callback executed. Skipping redundant cleanup.`);
+      onCleanupComplete();
+      return;
+    }
+
+    logger.debug(`[User ${userId}] Running ${cleanupHandlers.length} cleanup functions.`);
+    const cleanupsName = ['transcript', 'headPosition', 'error']
+    cleanupHandlers.forEach((cleanup, index) => {
+      try {
+        cleanup();
+      } catch (error){
+        logger.error(`[User ${userId}] Error running listener cleanup #${index}.`, {
+          userId: userId,
+          cleanup: cleanupsName[index],
+          error: {
+            message: error.message,
+            stack: error.stack,
+            responseStatus: error.response?.status,
+            responseBody: error.response?.data 
+          }
+        });
+      }
+    });
+
+    try {
+      stateCleanup();
+    } catch (error){
+      logger.error(`[User ${userId}] Error running state cleanup.`, {
+        userId: userId,
+        error: {
+          message: error.message,
+          stack: error.stack,
+          responseStatus: error.response?.status,
+          responseBody: error.response?.data 
+        }
+      });
+    }
+    onCleanupComplete();
+  });
   
   // Return all cleanup handlers
-  return cleanupHandlers;
+  return disconnectHandler;
 }
 
 // Handle player commands
@@ -392,6 +429,20 @@ function setSessionState(session: TpaSession, userId: string, newMode: SessionMo
   
   sessionStates.set(userId, newState);
   logger.info(`[User ${userId}] Mode changed to ${SessionMode[newMode]}`);
+}
+
+function clearSessionState(userId: string): void {
+  const state = sessionStates.get(userId);
+  if (state?.timeoutId) {
+      clearTimeout(state.timeoutId);
+  }
+  
+  const deleted = sessionStates.delete(userId);
+  if (deleted) {
+      logger.info(`[User ${userId}] Cleared session state from map.`);
+  } else {
+      logger.debug(`[User ${userId}] Attempted to clear session state, but no entry found.`);
+  }
 }
 
 async function triggerShazam(session: TpaSession, userId: string): Promise<void> {
