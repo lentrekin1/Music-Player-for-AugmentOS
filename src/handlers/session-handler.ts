@@ -41,7 +41,7 @@ const triggerPhases = {
 }
 
 // Set up session event handlers
-export function setupSessionHandlers(session: TpaSession, sessionId: string, userId: string, userSettings: any, onCleanupComplete: () => void): () => void {
+export function setupSessionHandlers(session: TpaSession, sessionId: string, userId: string, userSettings: any): () => void {
   // Array for handler cleanup
   const cleanupHandlers: Array<() => void> = [];
   const settings = userSettings
@@ -174,11 +174,6 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, use
 
   const disconnectHandler = session.events.onDisconnected((data) => {
     logger.warn(`[Session ${sessionId}] onDisconnected event triggered for User ${userId}. Running cleanup.`);
-    if (!sessionStates.has(userId)) {
-      logger.info(`[User ${userId}] State already cleared before onDisconnected callback executed. Skipping redundant cleanup.`);
-      onCleanupComplete();
-      return;
-    }
 
     logger.debug(`[User ${userId}] Running ${cleanupHandlers.length} cleanup functions.`);
     const cleanupsName = ['transcript', 'headPosition', 'error']
@@ -212,7 +207,6 @@ export function setupSessionHandlers(session: TpaSession, sessionId: string, use
         }
       });
     }
-    onCleanupComplete();
   });
   
   // Return all cleanup handlers
